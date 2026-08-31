@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Currency {
+  id              String   @id @default(uuid())
+  code            String   @unique
+  name            String
+  symbol          String
+  isBase          Boolean  @default(false)
+  defaultBuyRate  Float
+  defaultSellRate Float
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Party {
+  id            String         @id @default(uuid())
+  name          String
+  type          String         // "CUSTOMER" or "BANKER"
+  phone         String?
+  email         String?
+  bankDetails   String?
+  notes         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  partyRates    PartyRate[]
+  transactions  Transaction[]
+  ledgerEntries LedgerEntry[]
+  payments      Payment[]
+}
+
+model PartyRate {
+  id             String   @id @default(uuid())
+  partyId        String
+  party          Party    @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  currencyCode   String
+  customBuyRate  Float?
+  customSellRate Float?
+  marginPercent  Float    @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([partyId, currencyCode])
+}
+
+model Transaction {
+  id             String   @id @default(uuid())
+  receiptNo      String   @unique
+  type           String   // "BUY" or "SELL"
+  partyId        String
+  party          Party    @relation(fields: [partyId], references: [id])
+  fromCurrency   String
+  toCurrency     String
+  amountGiven    Float
+  amountReceived Float
+  appliedRate    Float
+  fee            Float    @default(0)
+  totalProfit    Float    @default(0)
+  paymentMethod  String   @default("CASH") // "CASH", "BANK", "PARTIAL"
+  status         String   @default("COMPLETED") // "COMPLETED", "PENDING", "CANCELLED"
+  notes          String?
+  createdAt      DateTime @default(now())
+}
+
+model LedgerEntry {
+  id            String   @id @default(uuid())
+  partyId       String
+  party         Party    @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  transactionId String?
+  currencyCode  String
+  type          String   // "DEBIT" or "CREDIT"
+  amount        Float
+  balanceAfter  Float
+  notes         String?
+  createdAt     DateTime @default(now())
+}
+
+model CurrencyInventory {
+  id           String   @id @default(uuid())
+  currencyCode String   @unique
+  cashBalance  Float    @default(0)
+  bankBalance  Float    @default(0)
+  updatedAt    DateTime @updatedAt
+}
+
+model WalletTransaction {
+  id                  String   @id @default(uuid())
+  type                String   // "CAPITAL_DEPOSIT", "CAPITAL_WITHDRAWAL", "TRANSFER_CASH_TO_BANK", "TRANSFER_BANK_TO_CASH", "ADJUSTMENT"
+  currencyCode        String
+  amount              Float
+  paymentMethod       String   // "CASH", "BANK"
+  sourceOrDestination String?  // e.g. "Owner Investment", "Safe Box", "HBL Bank"
+  notes               String?
+  createdAt           DateTime @default(now())
+}
+
+model Payment {
+  id            String   @id @default(uuid())
+  receiptNo     String   @unique
+  type          String   // "RECEIVED" (From buyer/customer), "SENT" (To seller/banker)
+  partyId       String
+  party         Party    @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  amount        Float
+  currencyCode  String
+  paymentMethod String   // "CASH", "BANK", "ONLINE", "CHEQUE"
+  referenceNo   String?  // Bank Ref #, Cheque #, Tx Hash
+  status        String   @default("COMPLETED") // "COMPLETED", "PENDING", "CANCELLED"
+  notes         String?
+  createdAt     DateTime @default(now())
+}
+
