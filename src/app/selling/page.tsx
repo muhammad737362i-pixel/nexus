@@ -30,7 +30,7 @@ export default function SellingPage() {
     async function loadData() {
       try {
         const [partiesRes, currRes] = await Promise.all([
-          fetch('/api/parties'),
+          fetch('/api/parties?type=BANKER'),
           fetch('/api/currencies'),
         ]);
 
@@ -165,7 +165,7 @@ export default function SellingPage() {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-900/80 p-4 rounded-xl text-xs border border-slate-800">
             <div>
-              <span className="text-slate-500 block">Buyer / Party</span>
+              <span className="text-slate-500 block">Banker</span>
               <span className="font-bold text-white">{selectedParty?.name}</span>
             </div>
             <div>
@@ -215,10 +215,10 @@ export default function SellingPage() {
       {/* Main Order Form */}
       <form onSubmit={handleSubmit} className="glass-card rounded-2xl p-6 border border-slate-800 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Party Selection */}
+          {/* Banker Selection */}
           <div className="space-y-2">
             <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-              Select Buyer / Party (Customer or Banker) *
+              Select Banker *
             </label>
             <select
               value={selectedPartyId}
@@ -227,13 +227,13 @@ export default function SellingPage() {
             >
               {parties.map((p) => (
                 <option key={p.id} value={p.id}>
-                  [{p.type}] {p.name}
+                  {p.name}
                 </option>
               ))}
             </select>
             {selectedParty && (
               <div className="text-[11px] text-slate-400 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 flex justify-between">
-                <span>Type: <strong className="text-indigo-400">{selectedParty.type}</strong></span>
+                <span>Banker: <strong className="text-indigo-400">{selectedParty.name}</strong></span>
                 <span>Contact: <strong className="text-slate-300">{selectedParty.phone || 'N/A'}</strong></span>
               </div>
             )}

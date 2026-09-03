@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  nexus:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nexus_app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:/app/prisma/dev.db
+    volumes:
+      - nexus_sqlite_data:/app/prisma
+    restart: always
+
+volumes:
+  nexus_sqlite_data:
