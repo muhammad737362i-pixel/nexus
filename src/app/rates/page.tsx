@@ -27,9 +27,8 @@ export default function RatesPage() {
   const [editSellRate, setEditSellRate] = useState('');
 
   // Party custom rate matrix form inputs
-  const [targetCurrency, setTargetCurrency] = useState('EUR');
-  const [customBuy, setCustomBuy] = useState('');
-  const [customSell, setCustomSell] = useState('');
+  const [targetCurrency, setTargetCurrency] = useState('INR');
+  const [fixedRate, setFixedRate] = useState('');
   const [marginPct, setMarginPct] = useState('0');
 
   const [loading, setLoading] = useState(true);
@@ -48,7 +47,11 @@ export default function RatesPage() {
       const partyJson = await partyRes.json();
       const ratesJson = await ratesRes.json();
 
-      if (currJson.success) setCurrencies(currJson.currencies);
+      if (currJson.success) {
+        setCurrencies(currJson.currencies);
+        const nonBase = currJson.currencies.find((c: any) => !c.isBase);
+        if (nonBase) setTargetCurrency(nonBase.code);
+      }
       if (partyJson.success) {
         setParties(partyJson.parties);
         if (partyJson.parties.length > 0 && !selectedPartyId) {
@@ -110,24 +113,23 @@ export default function RatesPage() {
         body: JSON.stringify({
           partyId: selectedPartyId,
           currencyCode: targetCurrency,
-          customBuyRate: customBuy || null,
-          customSellRate: customSell || null,
+          customBuyRate: fixedRate || null,
+          customSellRate: fixedRate || null,
           marginPercent: marginPct || 0,
         }),
       });
 
       const json = await res.json();
       if (json.success) {
-        setMessage({ type: 'success', text: 'Custom party rate saved successfully!' });
-        setCustomBuy('');
-        setCustomSell('');
+        setMessage({ type: 'success', text: 'Fixed rate saved successfully!' });
+        setFixedRate('');
         setMarginPct('0');
         loadData();
       } else {
-        setMessage({ type: 'error', text: json.error || 'Failed to save custom rate' });
+        setMessage({ type: 'error', text: json.error || 'Failed to save fixed rate' });
       }
     } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Error saving custom rate' });
+      setMessage({ type: 'error', text: err.message || 'Error saving rate' });
     } finally {
       setSaving(false);
     }
@@ -243,10 +245,10 @@ export default function RatesPage() {
           {/* Add / Edit Custom Rate Form */}
           <form onSubmit={handleSavePartyCustomRate} className="glass-card rounded-2xl p-6 border border-indigo-500/30 space-y-4">
             <h3 className="text-sm font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-indigo-400" /> Set Custom Rate Override for {selectedParty?.name}
+              <Sparkles className="w-4 h-4 text-indigo-400" /> Set Fixed Rate for {selectedParty?.name} ({selectedParty?.type === 'CUSTOMER' ? 'Customer' : 'Banker'})
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {/* Target Currency */}
               <div className="space-y-1.5">
                 <label className="text-xs text-slate-400 font-semibold">Target Currency</label>
@@ -265,29 +267,16 @@ export default function RatesPage() {
                 </select>
               </div>
 
-              {/* Custom Buy Rate */}
+              {/* Single Fixed Rate Input */}
               <div className="space-y-1.5">
-                <label className="text-xs text-emerald-400 font-semibold">Custom Buy Rate (Optional)</label>
+                <label className="text-xs text-emerald-400 font-semibold">Fixed Rate *</label>
                 <input
                   type="number"
                   step="any"
-                  value={customBuy}
-                  onChange={(e) => setCustomBuy(e.target.value)}
-                  placeholder="e.g. 1.088"
+                  value={fixedRate}
+                  onChange={(e) => setFixedRate(e.target.value)}
+                  placeholder="e.g. 88.50"
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-emerald-300 font-bold text-xs focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              {/* Custom Sell Rate */}
-              <div className="space-y-1.5">
-                <label className="text-xs text-amber-400 font-semibold">Custom Sell Rate (Optional)</label>
-                <input
-                  type="number"
-                  step="any"
-                  value={customSell}
-                  onChange={(e) => setCustomSell(e.target.value)}
-                  placeholder="e.g. 1.090"
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-amber-300 font-bold text-xs focus:outline-none focus:border-amber-500"
                 />
               </div>
 
@@ -315,7 +304,7 @@ export default function RatesPage() {
                 className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md transition flex items-center gap-2 disabled:opacity-50"
               >
                 {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                Save Party Custom Rate
+                Save Fixed Rate
               </button>
             </div>
           </form>
@@ -331,10 +320,8 @@ export default function RatesPage() {
                 <thead className="bg-slate-900 text-slate-400 uppercase text-[11px] tracking-wider border-b border-slate-800">
                   <tr>
                     <th className="py-3 px-4">Currency</th>
-                    <th className="py-3 px-4">Default Buy Rate</th>
-                    <th className="py-3 px-4">Assigned Custom Buy</th>
-                    <th className="py-3 px-4">Default Sell Rate</th>
-                    <th className="py-3 px-4">Assigned Custom Sell</th>
+                    <th className="py-3 px-4">Default Rate</th>
+                    <th className="py-3 px-4">Assigned Fixed Rate</th>
                     <th className="py-3 px-4">Margin %</th>
                     <th className="py-3 px-4 text-right">Status</th>
                   </tr>
@@ -344,6 +331,7 @@ export default function RatesPage() {
                     .filter((c) => !c.isBase)
                     .map((c) => {
                       const assigned = partyCustomRates.find((r) => r.currencyCode === c.code);
+                      const currentFixedRate = assigned?.customBuyRate ?? assigned?.customSellRate;
 
                       return (
                         <tr key={c.code} className="hover:bg-slate-800/40 transition">
@@ -355,22 +343,12 @@ export default function RatesPage() {
                           </td>
                           <td className="py-3.5 px-4 font-mono text-slate-400">{c.defaultBuyRate}</td>
                           <td className="py-3.5 px-4 font-bold text-emerald-400">
-                            {assigned?.customBuyRate ? (
+                            {currentFixedRate ? (
                               <span className="bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/30">
-                                {assigned.customBuyRate}
+                                {currentFixedRate}
                               </span>
                             ) : (
                               <span className="text-slate-600 font-normal">Default ({c.defaultBuyRate})</span>
-                            )}
-                          </td>
-                          <td className="py-3.5 px-4 font-mono text-slate-400">{c.defaultSellRate}</td>
-                          <td className="py-3.5 px-4 font-bold text-amber-400">
-                            {assigned?.customSellRate ? (
-                              <span className="bg-amber-500/10 px-2 py-1 rounded border border-amber-500/30">
-                                {assigned.customSellRate}
-                              </span>
-                            ) : (
-                              <span className="text-slate-600 font-normal">Default ({c.defaultSellRate})</span>
                             )}
                           </td>
                           <td className="py-3.5 px-4 font-bold text-purple-300">
@@ -379,7 +357,7 @@ export default function RatesPage() {
                           <td className="py-3.5 px-4 text-right">
                             {assigned ? (
                               <span className="inline-flex items-center gap-1 text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                                Custom Rate Active
+                                Fixed Rate Active
                               </span>
                             ) : (
                               <span className="text-[10px] text-slate-500">Global Standard</span>
