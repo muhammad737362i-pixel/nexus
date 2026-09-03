@@ -15,15 +15,61 @@ import {
   ChevronRight,
   SlidersHorizontal,
   Banknote,
+  Calendar,
+  RotateCcw,
+  Filter,
 } from 'lucide-react';
 
 export default function Dashboard() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+  // Date & Time Search Filter State
+  const [datePreset, setDatePreset] = useState<string>('TODAY'); // TODAY, YESTERDAY, WEEK, MONTH, ALL, CUSTOM
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  // Compute ISO date range from preset or custom input
+  const getComputedDates = () => {
+    if (datePreset === 'CUSTOM') {
+      return { start: startDate, end: endDate };
+    }
+    const now = new Date();
+    if (datePreset === 'TODAY') {
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
+      return { start, end };
+    }
+    if (datePreset === 'YESTERDAY') {
+      const y = new Date(now);
+      y.setDate(y.getDate() - 1);
+      const start = new Date(y.getFullYear(), y.getMonth(), y.getDate()).toISOString();
+      const end = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23, 59, 59, 999).toISOString();
+      return { start, end };
+    }
+    if (datePreset === 'WEEK') {
+      const w = new Date(now);
+      w.setDate(w.getDate() - 7);
+      return { start: w.toISOString(), end: now.toISOString() };
+    }
+    if (datePreset === 'MONTH') {
+      const m = new Date(now);
+      m.setDate(m.getDate() - 30);
+      return { start: m.toISOString(), end: now.toISOString() };
+    }
+    return { start: '', end: '' }; // ALL TIME
+  };
+
   const fetchDashboard = async () => {
     try {
-      const res = await fetch('/api/dashboard');
+      let url = '/api/dashboard';
+      const params = new URLSearchParams();
+      const { start, end } = getComputedDates();
+      if (start) params.append('startDate', start);
+      if (end) params.append('endDate', end);
+      if (params.toString()) url += `?${params.toString()}`;
+
+      const res = await fetch(url);
       const json = await res.json();
       if (json.success) {
         setData(json);
@@ -37,7 +83,13 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchDashboard();
-  }, []);
+  }, [datePreset, startDate, endDate]);
+
+  const resetDateFilter = () => {
+    setDatePreset('TODAY');
+    setStartDate('');
+    setEndDate('');
+  };
 
   if (loading) {
     return (
@@ -51,6 +103,23 @@ export default function Dashboard() {
   const inventory = data?.inventory || [];
   const recentTx = data?.recentTransactions || [];
 
+  const getMetricLabelPrefix = () => {
+    switch (datePreset) {
+      case 'TODAY':
+        return 'Today';
+      case 'YESTERDAY':
+        return 'Yesterday';
+      case 'WEEK':
+        return '7-Day';
+      case 'MONTH':
+        return '30-Day';
+      case 'ALL':
+        return 'All Time';
+      default:
+        return 'Period';
+    }
+  };
+
   return (
     <div className="w-full space-y-6">
       {/* Page Header */}
@@ -60,7 +129,7 @@ export default function Dashboard() {
             Exchange Command Center
           </h1>
           <p className="text-slate-400 text-sm mt-0.5">
-            Real-time overview of cash/bank balances, daily volumes, wallet capital, and exchange profits.
+            Real-time overview of cash/bank balances, volumes, capital, and exchange profits with date/time filters.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -91,13 +160,83 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* DASHBOARD DATE & TIME SEARCH FILTER BAR */}
+      <div className="glass-card rounded-2xl p-4 border border-slate-800 space-y-3">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-2 text-xs font-bold text-indigo-300 uppercase tracking-wider">
+            <Filter className="w-4 h-4 text-indigo-400" />
+            <span>Dashboard Date & Time Search Filter</span>
+          </div>
+
+          {/* Quick Date Presets */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {[
+              { label: 'Today', value: 'TODAY' },
+              { label: 'Yesterday', value: 'YESTERDAY' },
+              { label: 'This Week', value: 'WEEK' },
+              { label: 'This Month', value: 'MONTH' },
+              { label: 'All Time', value: 'ALL' },
+              { label: 'Custom Range', value: 'CUSTOM' },
+            ].map((p) => (
+              <button
+                key={p.value}
+                onClick={() => setDatePreset(p.value)}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+                  datePreset === p.value
+                    ? 'bg-indigo-600 text-white shadow-md'
+                    : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-800'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+
+            {datePreset !== 'TODAY' && (
+              <button
+                onClick={resetDateFilter}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 border border-rose-500/30 transition flex items-center gap-1 ml-2"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> Reset
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Custom Date & Time Range Pickers */}
+        {datePreset === 'CUSTOM' && (
+          <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-800 flex flex-wrap items-center gap-4 animate-fadeIn text-xs pt-3">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-indigo-400" />
+              <span className="text-slate-400 font-semibold">From (Start Date/Time):</span>
+              <input
+                type="datetime-local"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-white font-medium focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400 font-semibold">To (End Date/Time):</span>
+              <input
+                type="datetime-local"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-white font-medium focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Metric 1: Today Buy Volume */}
+        {/* Metric 1: Buy Volume */}
         <div className="glass-card rounded-2xl p-5 border border-slate-800 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/10 rounded-full blur-xl group-hover:bg-emerald-500/20 transition" />
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Today Buy Volume</span>
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              {getMetricLabelPrefix()} Buy Volume
+            </span>
             <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
               <ArrowDownLeft className="w-4 h-4" />
             </div>
@@ -106,15 +245,17 @@ export default function Dashboard() {
             ${metrics.todayBuyVolume?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </div>
           <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
-            <TrendingUp className="w-3.5 h-3.5" /> Express Buy Payouts
+            <TrendingUp className="w-3.5 h-3.5" /> Express Buy Payouts ({metrics.totalTxCount || 0} trades)
           </div>
         </div>
 
-        {/* Metric 2: Today Sell Volume */}
+        {/* Metric 2: Sell Volume */}
         <div className="glass-card rounded-2xl p-5 border border-slate-800 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/10 rounded-full blur-xl group-hover:bg-amber-500/20 transition" />
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Today Sell Volume</span>
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              {getMetricLabelPrefix()} Sell Volume
+            </span>
             <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
               <ArrowUpRight className="w-4 h-4" />
             </div>
@@ -123,7 +264,7 @@ export default function Dashboard() {
             ${metrics.todaySellVolume?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </div>
           <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-400 font-medium">
-            <TrendingUp className="w-3.5 h-3.5" /> Express Sell Receipts
+            <TrendingUp className="w-3.5 h-3.5" /> Express Sell Receipts ({metrics.totalTxCount || 0} trades)
           </div>
         </div>
 
@@ -131,7 +272,9 @@ export default function Dashboard() {
         <div className="glass-card rounded-2xl p-5 border border-indigo-500/30 relative overflow-hidden group bg-gradient-to-br from-indigo-950/40 to-slate-900/60">
           <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/20 rounded-full blur-xl group-hover:bg-indigo-500/30 transition" />
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-indigo-300 uppercase tracking-wider">Est. Net Profit</span>
+            <span className="text-xs font-semibold text-indigo-300 uppercase tracking-wider">
+              {getMetricLabelPrefix()} Est. Net Profit
+            </span>
             <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
               <DollarSign className="w-4 h-4" />
             </div>
@@ -140,7 +283,7 @@ export default function Dashboard() {
             +${metrics.todayEstProfit?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </div>
           <div className="mt-2 flex items-center gap-1.5 text-xs text-indigo-300 font-medium">
-            Spread + Fees Earned Today
+            Spread + Fees Earned ({getMetricLabelPrefix()})
           </div>
         </div>
 
@@ -231,12 +374,12 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Right 1 Col: Recent Transactions Feed */}
+        {/* Right 1 Col: Filtered Recent Trades Feed */}
         <div className="glass-card rounded-2xl p-6 border border-slate-800 space-y-4 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <Clock className="w-5 h-5 text-amber-400" /> Recent Trades
+                <Clock className="w-5 h-5 text-amber-400" /> {getMetricLabelPrefix()} Trades
               </h2>
               <Link href="/transactions" className="text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-0.5">
                 View All <ChevronRight className="w-3.5 h-3.5" />
@@ -245,7 +388,9 @@ export default function Dashboard() {
 
             <div className="space-y-3">
               {recentTx.length === 0 ? (
-                <div className="text-xs text-slate-500 text-center py-8">No recent transactions</div>
+                <div className="text-xs text-slate-500 text-center py-8">
+                  No trades found for {getMetricLabelPrefix()} period
+                </div>
               ) : (
                 recentTx.map((tx: any) => (
                   <div
@@ -264,7 +409,7 @@ export default function Dashboard() {
                       </div>
                       <div>
                         <div className="font-semibold text-xs text-white flex items-center gap-2">
-                          <span>{tx.party.name}</span>
+                          <span>{tx.party?.name}</span>
                           <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 font-mono">
                             {tx.receiptNo}
                           </span>

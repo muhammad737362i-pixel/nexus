@@ -1,30 +1,42 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
+    const { searchParams } = new URL(req.url);
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
 
-    // 1. Transactions Today
-    const todayTransactions = await prisma.transaction.findMany({
-      where: {
-        createdAt: { gte: todayStart },
-      },
+    const txWhere: any = {};
+    if (startDate || endDate) {
+      txWhere.createdAt = {};
+      if (startDate) txWhere.createdAt.gte = new Date(startDate);
+      if (endDate) txWhere.createdAt.lte = new Date(endDate);
+    } else {
+      // Default: Today's transactions
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      txWhere.createdAt = { gte: todayStart };
+    }
+
+    // 1. Transactions in Date & Time Range
+    const periodTransactions = await prisma.transaction.findMany({
+      where: txWhere,
       include: { party: true },
+      orderBy: { createdAt: 'desc' },
     });
 
-    let todayBuyVolume = 0;
-    let todaySellVolume = 0;
-    let todayEstProfit = 0;
+    let buyVolume = 0;
+    let sellVolume = 0;
+    let estProfit = 0;
 
-    todayTransactions.forEach((tx: any) => {
+    periodTransactions.forEach((tx: any) => {
       if (tx.type === 'BUY') {
-        todayBuyVolume += tx.amountGiven;
+        buyVolume += tx.amountGiven || 0;
       } else if (tx.type === 'SELL') {
-        todaySellVolume += tx.amountGiven;
+        sellVolume += tx.amountGiven || 0;
       }
-      todayEstProfit += tx.totalProfit;
+      estProfit += tx.totalProfit || 0;
     });
 
     // 2. Total Parties Count
@@ -41,22 +53,18 @@ export async function GET() {
       orderBy: { code: 'asc' },
     });
 
-    // 5. Recent 10 Transactions
-    const recentTransactions = await prisma.transaction.findMany({
-      take: 10,
-      orderBy: { createdAt: 'desc' },
-      include: { party: true },
-    });
+    // 5. Recent 10 Transactions in range
+    const recentTransactions = periodTransactions.slice(0, 10);
 
     return NextResponse.json({
       success: true,
       metrics: {
-        todayBuyVolume,
-        todaySellVolume,
-        todayEstProfit,
+        todayBuyVolume: Number(buyVolume.toFixed(2)),
+        todaySellVolume: Number(sellVolume.toFixed(2)),
+        todayEstProfit: Number(estProfit.toFixed(2)),
         customerCount,
         bankerCount,
-        totalTxCount: todayTransactions.length,
+        totalTxCount: periodTransactions.length,
       },
       inventory,
       currencies,
