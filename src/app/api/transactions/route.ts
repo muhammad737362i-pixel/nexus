@@ -7,19 +7,51 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const type = searchParams.get('type');
     const partyId = searchParams.get('partyId');
-    const status = searchParams.get('status');
+    const partyType = searchParams.get('partyType');
+    const paymentMethod = searchParams.get('paymentMethod');
+    const currency = searchParams.get('currency');
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
     const search = searchParams.get('search');
 
     const where: any = {};
-    if (type) where.type = type;
-    if (partyId) where.partyId = partyId;
-    if (status) where.status = status;
-    if (search) {
+
+    if (type && type !== 'ALL') where.type = type;
+    if (partyId && partyId !== 'ALL') where.partyId = partyId;
+    if (paymentMethod && paymentMethod !== 'ALL') where.paymentMethod = paymentMethod;
+
+    if (partyType && partyType !== 'ALL') {
+      where.party = { type: partyType };
+    }
+
+    if (currency && currency !== 'ALL') {
       where.OR = [
+        { fromCurrency: currency },
+        { toCurrency: currency },
+      ];
+    }
+
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt.gte = new Date(startDate);
+      if (endDate) where.createdAt.lte = new Date(endDate);
+    }
+
+    if (search) {
+      const searchCondition = [
         { receiptNo: { contains: search } },
         { notes: { contains: search } },
         { party: { name: { contains: search } } },
       ];
+      if (where.OR) {
+        where.AND = [
+          { OR: where.OR },
+          { OR: searchCondition },
+        ];
+        delete where.OR;
+      } else {
+        where.OR = searchCondition;
+      }
     }
 
     const transactions = await prisma.transaction.findMany({
@@ -30,7 +62,31 @@ export async function GET(req: Request) {
       orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json({ success: true, transactions });
+    // Compute summary metrics for the filtered result set
+    const totalCount = transactions.length;
+    let totalBuyVolume = 0;
+    let totalSellVolume = 0;
+    let totalProfit = 0;
+
+    for (const tx of transactions) {
+      totalProfit += tx.totalProfit || 0;
+      if (tx.type === 'BUY') {
+        totalBuyVolume += tx.amountGiven || 0;
+      } else if (tx.type === 'SELL') {
+        totalSellVolume += tx.amountGiven || 0;
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      transactions,
+      metrics: {
+        totalCount,
+        totalBuyVolume: Number(totalBuyVolume.toFixed(2)),
+        totalSellVolume: Number(totalSellVolume.toFixed(2)),
+        totalProfit: Number(totalProfit.toFixed(2)),
+      },
+    });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
