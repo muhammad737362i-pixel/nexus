@@ -14,7 +14,10 @@ import {
   Server,
   Wallet,
   Banknote,
+  Sun,
+  Moon,
 } from 'lucide-react';
+import { useTheme } from '@/context/ThemeContext';
 
 const navItems = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -30,6 +33,7 @@ const navItems = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <aside className="w-64 shrink-0 bg-slate-900/90 border-r border-slate-800/80 flex flex-col justify-between h-screen sticky top-0 z-30 select-none">
@@ -84,19 +88,36 @@ export function Sidebar() {
         </nav>
       </div>
 
-      {/* Deployment / Hostinger VPS Info */}
-      <div className="p-4 m-3 rounded-xl bg-slate-950/60 border border-slate-800/80 text-xs space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-slate-400 flex items-center gap-1.5 font-medium">
-            <Server className="w-3.5 h-3.5 text-emerald-400" /> Environment
+      {/* Theme Toggle & VPS Info Footer */}
+      <div className="p-3 space-y-2">
+        <button
+          onClick={toggleTheme}
+          type="button"
+          className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700/80 transition cursor-pointer shadow-sm"
+        >
+          <div className="flex items-center gap-2">
+            {theme === 'dark' ? (
+              <Sun className="w-4 h-4 text-amber-400" />
+            ) : (
+              <Moon className="w-4 h-4 text-indigo-400" />
+            )}
+            <span>{theme === 'dark' ? 'Simple (Light) Mode' : 'Dark Mode'}</span>
+          </div>
+          <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+            {theme === 'dark' ? 'White UI' : 'Dark UI'}
           </span>
-          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" /> Local Browser
-          </span>
+        </button>
+
+        <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 text-xs space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-slate-400 flex items-center gap-1.5 font-medium text-[11px]">
+              <Server className="w-3.5 h-3.5 text-emerald-400" /> Hostinger VPS
+            </span>
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" /> Online
+            </span>
+          </div>
         </div>
-        <p className="text-slate-500 text-[11px] leading-relaxed">
-          Ready to deploy on Hostinger VPS (SQLite DB self-contained).
-        </p>
       </div>
     </aside>
   );

@@ -73,3 +73,63 @@ body {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
+
+/* Light / Simple Mode Overrides */
+body.light-mode {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+body.light-mode aside {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+
+body.light-mode .glass-card {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+}
+
+body.light-mode input,
+body.light-mode select {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+body.light-mode select option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+body.light-mode .text-white {
+  color: #0f172a !important;
+}
+
+body.light-mode .text-slate-300,
+body.light-mode .text-slate-400 {
+  color: #334155 !important;
+}
+
+body.light-mode .text-slate-500 {
+  color: #64748b !important;
+}
+
+body.light-mode .border-slate-800,
+body.light-mode .border-slate-700 {
+  border-color: #e2e8f0 !important;
+}
+
+body.light-mode .bg-slate-900,
+body.light-mode .bg-slate-950 {
+  background-color: #f1f5f9 !important;
+}
+
+body.light-mode .bg-slate-900\/60,
+body.light-mode .bg-slate-900\/80,
+body.light-mode .bg-slate-900\/90 {
+  background-color: #f8fafc !important;
+}
+
