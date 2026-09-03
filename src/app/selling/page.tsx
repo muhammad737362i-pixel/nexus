@@ -12,9 +12,9 @@ export default function SellingPage() {
 
   const [selectedPartyId, setSelectedPartyId] = useState('');
   const [fromCurrency, setFromCurrency] = useState('USD');
-  const [toCurrency, setToCurrency] = useState('AED');
+  const [toCurrency, setToCurrency] = useState('INR');
   const [amountGiven, setAmountGiven] = useState<string>('2000');
-  const [appliedRate, setAppliedRate] = useState<string>('0.2728');
+  const [appliedRate, setAppliedRate] = useState<string>('89.20');
   const [isCustomRate, setIsCustomRate] = useState<boolean>(false);
   const [fee, setFee] = useState<string>('0');
   const [paymentMethod, setPaymentMethod] = useState<string>('CASH');
@@ -44,8 +44,12 @@ export default function SellingPage() {
           }
         }
 
-        if (currJson.success) {
+        if (currJson.success && currJson.currencies.length > 0) {
           setCurrencies(currJson.currencies);
+          const baseCurr = currJson.currencies.find((c: any) => c.isBase) || currJson.currencies[0];
+          const nonBaseCurr = currJson.currencies.find((c: any) => !c.isBase) || currJson.currencies[0];
+          if (baseCurr) setFromCurrency(baseCurr.code);
+          if (nonBaseCurr) setToCurrency(nonBaseCurr.code);
         }
       } catch (e) {
         console.error(e);
@@ -82,7 +86,7 @@ export default function SellingPage() {
   const numAmount = parseFloat(amountGiven) || 0;
   const numRate = parseFloat(appliedRate) || 0;
   const numFee = parseFloat(fee) || 0;
-  const amountReceived = numRate > 0 ? (numAmount / numRate).toFixed(2) : '0.00';
+  const amountReceived = (numAmount * numRate).toFixed(2);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -100,8 +100,8 @@ export async function processBuyTransaction(params: {
   const party = await prisma.party.findUnique({ where: { id: partyId } });
   if (!party) throw new Error('Party not found');
 
-  // Amount received in target currency = amountGiven * appliedRate (or divided if cross)
-  const amountReceived = Number((amountGiven * appliedRate).toFixed(2));
+  // Amount received in target currency (base USD) = amountGiven / appliedRate
+  const amountReceived = appliedRate > 0 ? Number((amountGiven / appliedRate).toFixed(2)) : 0;
   
   // Profit estimation calculation (Difference between buy rate and base rate)
   const baseCurrency = await prisma.currency.findUnique({ where: { code: fromCurrency } });
