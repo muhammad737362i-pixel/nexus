@@ -242,7 +242,7 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="text-2xl font-bold text-white">
-            ${metrics.todayBuyVolume?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            ₹{metrics.todayBuyVolume?.toLocaleString('en-IN', { minimumFractionDigits: 2 })} <span className="text-xs text-slate-400 font-normal">INR</span>
           </div>
           <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
             <TrendingUp className="w-3.5 h-3.5" /> Express Buy Payouts ({metrics.totalTxCount || 0} trades)
@@ -261,7 +261,7 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="text-2xl font-bold text-white">
-            ${metrics.todaySellVolume?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            ₹{metrics.todaySellVolume?.toLocaleString('en-IN', { minimumFractionDigits: 2 })} <span className="text-xs text-slate-400 font-normal">INR</span>
           </div>
           <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-400 font-medium">
             <TrendingUp className="w-3.5 h-3.5" /> Express Sell Receipts ({metrics.totalTxCount || 0} trades)
@@ -280,7 +280,7 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="text-2xl font-bold text-emerald-400">
-            +${metrics.todayEstProfit?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            +₹{metrics.todayEstProfit?.toLocaleString('en-IN', { minimumFractionDigits: 2 })} <span className="text-xs text-emerald-300/80 font-normal">INR</span>
           </div>
           <div className="mt-2 flex items-center gap-1.5 text-xs text-indigo-300 font-medium">
             Spread + Fees Earned ({getMetricLabelPrefix()})
@@ -424,7 +424,7 @@ export default function Dashboard() {
                         {tx.amountGiven.toLocaleString('en-US')} {tx.fromCurrency}
                       </div>
                       <div className="text-[10px] text-emerald-400 font-medium">
-                        +${tx.totalProfit.toFixed(2)} profit
+                        +₹{tx.totalProfit?.toLocaleString('en-IN', { minimumFractionDigits: 2 })} profit
                       </div>
                     </div>
                   </div>
