@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
@@ -14,6 +15,7 @@ async function main() {
   await prisma.party.deleteMany();
   await prisma.currencyInventory.deleteMany();
   await prisma.currency.deleteMany();
+  await prisma.user.deleteMany();
 
   // 2. Insert Default Production Base Currencies with 0 balances
   const currencies = [
@@ -35,7 +37,20 @@ async function main() {
     await prisma.currencyInventory.create({ data: item });
   }
 
-  console.log('Production database cleaned successfully! (0 parties, 0 transactions, 0 balance).');
+  // 4. Create Default Super Admin Account
+  const hashedPassword = await bcrypt.hash('admin123', 10);
+  await prisma.user.create({
+    data: {
+      username: 'admin',
+      name: 'Super Admin',
+      email: 'admin@nexus.local',
+      password: hashedPassword,
+      role: 'ADMIN',
+      status: 'ACTIVE',
+    },
+  });
+
+  console.log('Production database cleaned successfully! Default Admin created (admin / admin123).');
 }
 
 main()
