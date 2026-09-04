@@ -49,7 +49,8 @@ export default function PaymentsPage() {
       if (json.success) {
         setData(json);
         if (json.parties && json.parties.length > 0 && !partyId) {
-          setPartyId(json.parties[0].id);
+          const defaultParty = json.parties.find((p: any) => p.type === 'CUSTOMER') || json.parties[0];
+          setPartyId(defaultParty.id);
         }
       }
     } catch (e) {
@@ -63,8 +64,17 @@ export default function PaymentsPage() {
     fetchPayments();
   }, []);
 
-  const openNewPaymentModal = (direction: 'RECEIVED' | 'SENT' = 'RECEIVED') => {
+  const handleDirectionChange = (direction: 'RECEIVED' | 'SENT') => {
     setPaymentType(direction);
+    const targetType = direction === 'RECEIVED' ? 'CUSTOMER' : 'BANKER';
+    const matchingParty = data?.parties?.find((p: any) => p.type === targetType);
+    if (matchingParty) {
+      setPartyId(matchingParty.id);
+    }
+  };
+
+  const openNewPaymentModal = (direction: 'RECEIVED' | 'SENT' = 'RECEIVED') => {
+    handleDirectionChange(direction);
     setAmount('');
     setReferenceNo('');
     setNotes('');
@@ -415,7 +425,7 @@ export default function PaymentsPage() {
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => setPaymentType('RECEIVED')}
+                    onClick={() => handleDirectionChange('RECEIVED')}
                     className={`py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-2 border transition cursor-pointer ${
                       paymentType === 'RECEIVED'
                         ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500 shadow-lg shadow-emerald-600/20'
@@ -426,7 +436,7 @@ export default function PaymentsPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setPaymentType('SENT')}
+                    onClick={() => handleDirectionChange('SENT')}
                     className={`py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-2 border transition cursor-pointer ${
                       paymentType === 'SENT'
                         ? 'bg-amber-600/20 text-amber-400 border-amber-500 shadow-lg shadow-amber-600/20'
@@ -441,7 +451,7 @@ export default function PaymentsPage() {
               {/* Party Selector */}
               <div>
                 <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
-                  Select Buyer / Seller Party
+                  {paymentType === 'RECEIVED' ? 'Select Customer (Buyer)' : 'Select Banker (Seller)'}
                 </label>
                 <select
                   value={partyId}
@@ -449,11 +459,13 @@ export default function PaymentsPage() {
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white font-medium focus:outline-none focus:border-indigo-500"
                   required
                 >
-                  {parties.map((p: any) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({p.type === 'CUSTOMER' ? 'Buyer / Customer' : 'Seller / Banker'})
-                    </option>
-                  ))}
+                  {parties
+                    .filter((p: any) => (paymentType === 'RECEIVED' ? p.type === 'CUSTOMER' : p.type === 'BANKER'))
+                    .map((p: any) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
                 </select>
               </div>
 
