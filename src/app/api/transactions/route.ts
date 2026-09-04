@@ -186,3 +186,55 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
+
+export async function PUT(req: Request) {
+  try {
+    const body = await req.json();
+    const { id, partyId, type, amountGiven, appliedRate, fee, paymentMethod, notes } = body;
+
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'Transaction ID is required' }, { status: 400 });
+    }
+
+    const tx = await prisma.transaction.findUnique({ where: { id } });
+    if (!tx) {
+      return NextResponse.json({ success: false, error: 'Transaction not found' }, { status: 404 });
+    }
+
+    const numAmount = parseFloat(amountGiven);
+    const numRate = parseFloat(appliedRate);
+    const numFee = fee !== undefined && fee !== null ? parseFloat(fee) : tx.fee;
+
+    if (isNaN(numAmount) || numAmount <= 0 || isNaN(numRate) || numRate <= 0) {
+      return NextResponse.json({ success: false, error: 'Valid amount given and rate are required' }, { status: 400 });
+    }
+
+    const newAmountReceived = Number((numAmount / numRate).toFixed(2));
+    const baseCurrency = await prisma.currency.findUnique({ where: { code: tx.fromCurrency } });
+    const benchmarkRate = (type === 'BUY' ? baseCurrency?.defaultBuyRate : baseCurrency?.defaultSellRate) || numRate;
+    const spread = Math.abs(numRate - benchmarkRate);
+    const totalProfit = Number((numAmount * spread + numFee).toFixed(2));
+
+    const updatedTx = await prisma.transaction.update({
+      where: { id },
+      data: {
+        partyId: partyId || tx.partyId,
+        type: type || tx.type,
+        amountGiven: numAmount,
+        appliedRate: numRate,
+        amountReceived: newAmountReceived,
+        fee: numFee,
+        totalProfit,
+        paymentMethod: paymentMethod || tx.paymentMethod,
+        notes: notes !== undefined ? notes : tx.notes,
+      },
+      include: {
+        party: true,
+      },
+    });
+
+    return NextResponse.json({ success: true, transaction: updatedTx });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}
