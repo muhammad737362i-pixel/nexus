@@ -119,8 +119,6 @@ export default function SellingPage() {
       if (json.success) {
         setSuccessReceipt(json.transaction);
         setAmountGiven('');
-        setNotes('');
-        setFee('0');
       } else {
         setErrorMsg(json.error || 'Failed to execute sell transaction');
       }
