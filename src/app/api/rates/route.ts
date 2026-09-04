@@ -61,3 +61,28 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
+
+export async function DELETE(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const partyId = searchParams.get('partyId');
+    const currencyCode = searchParams.get('currencyCode');
+
+    if (!partyId || !currencyCode) {
+      return NextResponse.json({ success: false, error: 'Party ID and Currency Code are required' }, { status: 400 });
+    }
+
+    await prisma.partyRate.delete({
+      where: {
+        partyId_currencyCode: {
+          partyId,
+          currencyCode,
+        },
+      },
+    });
+
+    return NextResponse.json({ success: true, message: 'Custom rate override deleted' });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}

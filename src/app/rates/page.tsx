@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Edit2,
   Percent,
+  Trash2,
 } from 'lucide-react';
 
 export default function RatesPage() {
@@ -132,6 +133,22 @@ export default function RatesPage() {
       setMessage({ type: 'error', text: err.message || 'Error saving rate' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteCustomRate = async (partyId: string, currencyCode: string) => {
+    if (!confirm(`Remove custom fixed rate override for ${currencyCode}?`)) return;
+    try {
+      const res = await fetch(`/api/rates?partyId=${partyId}&currencyCode=${currencyCode}`, { method: 'DELETE' });
+      const json = await res.json();
+      if (json.success) {
+        setMessage({ type: 'success', text: `Deleted custom rate override for ${currencyCode}` });
+        loadData();
+      } else {
+        setMessage({ type: 'error', text: json.error || 'Failed to delete custom rate override' });
+      }
+    } catch (e: any) {
+      setMessage({ type: 'error', text: e.message || 'Error deleting custom rate override' });
     }
   };
 
@@ -356,9 +373,18 @@ export default function RatesPage() {
                           </td>
                           <td className="py-3.5 px-4 text-right">
                             {assigned ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                                Fixed Rate Active
-                              </span>
+                              <div className="flex items-center justify-end gap-2">
+                                <span className="inline-flex items-center gap-1 text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                                  Fixed Rate Active
+                                </span>
+                                <button
+                                  onClick={() => handleDeleteCustomRate(selectedPartyId, c.code)}
+                                  title="Delete custom rate override"
+                                  className="p-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg border border-rose-500/30 transition cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             ) : (
                               <span className="text-[10px] text-slate-500">Global Standard</span>
                             )}

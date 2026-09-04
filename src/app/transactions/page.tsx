@@ -19,6 +19,7 @@ import {
   TrendingUp,
   Banknote,
   SlidersHorizontal,
+  Trash2,
 } from 'lucide-react';
 
 export default function TransactionsPage() {
@@ -213,6 +214,21 @@ export default function TransactionsPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleDeleteTransaction = async (id: string, receiptNo: string) => {
+    if (!confirm(`Are you sure you want to delete transaction ${receiptNo}? This will revert inventory balances.`)) return;
+    try {
+      const res = await fetch(`/api/transactions?id=${id}`, { method: 'DELETE' });
+      const json = await res.json();
+      if (json.success) {
+        fetchTransactions();
+      } else {
+        alert(json.error || 'Failed to delete transaction');
+      }
+    } catch (e: any) {
+      alert(e.message || 'Error deleting transaction');
+    }
   };
 
   // Filter parties by selected partyType if applicable
@@ -565,12 +581,21 @@ export default function TransactionsPage() {
                       +${tx.totalProfit.toFixed(2)}
                     </td>
                     <td className="py-3.5 px-4 text-right">
-                      <button
-                        onClick={() => setActiveReceipt(tx)}
-                        className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-indigo-300 rounded-lg text-[11px] font-semibold inline-flex items-center gap-1"
-                      >
-                        <FileText className="w-3 h-3" /> Receipt
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => setActiveReceipt(tx)}
+                          className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-indigo-300 rounded-lg text-[11px] font-semibold inline-flex items-center gap-1"
+                        >
+                          <FileText className="w-3 h-3" /> Receipt
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTransaction(tx.id, tx.receiptNo)}
+                          title="Delete transaction"
+                          className="p-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg border border-rose-500/30 transition cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

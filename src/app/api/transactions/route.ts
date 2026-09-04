@@ -136,3 +136,53 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
+
+export async function DELETE(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'Transaction ID is required' }, { status: 400 });
+    }
+
+    const tx = await prisma.transaction.findUnique({ where: { id } });
+    if (!tx) {
+      return NextResponse.json({ success: false, error: 'Transaction not found' }, { status: 404 });
+    }
+
+    await prisma.$transaction(async (prismaTx: any) => {
+      // 1. Revert Inventory adjustments
+      const isBank = tx.paymentMethod === 'BANK';
+      const invFrom = await prismaTx.currencyInventory.findUnique({ where: { currencyCode: tx.fromCurrency } });
+      if (invFrom) {
+        const field = isBank ? 'bankBalance' : 'cashBalance';
+        const newBal = Math.max(0, invFrom[field] - tx.amountGiven);
+        await prismaTx.currencyInventory.update({
+          where: { currencyCode: tx.fromCurrency },
+          data: { [field]: newBal },
+        });
+      }
+
+      const invTo = await prismaTx.currencyInventory.findUnique({ where: { currencyCode: tx.toCurrency } });
+      if (invTo) {
+        const field = isBank ? 'bankBalance' : 'cashBalance';
+        const newBal = invTo[field] + tx.amountReceived;
+        await prismaTx.currencyInventory.update({
+          where: { currencyCode: tx.toCurrency },
+          data: { [field]: newBal },
+        });
+      }
+
+      // 2. Delete Ledger Entries
+      await prismaTx.ledgerEntry.deleteMany({ where: { transactionId: id } });
+
+      // 3. Delete Transaction
+      await prismaTx.transaction.delete({ where: { id } });
+    });
+
+    return NextResponse.json({ success: true, message: 'Transaction deleted successfully' });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}

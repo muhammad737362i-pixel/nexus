@@ -181,3 +181,52 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
 }
+
+export async function DELETE(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'Payment ID is required' }, { status: 400 });
+    }
+
+    const payment = await prisma.payment.findUnique({ where: { id } });
+    if (!payment) {
+      return NextResponse.json({ success: false, error: 'Payment record not found' }, { status: 404 });
+    }
+
+    await prisma.$transaction(async (tx: any) => {
+      // Revert Inventory
+      const isBankChannel = ['BANK', 'ONLINE', 'CHEQUE'].includes((payment.paymentMethod || '').toUpperCase());
+      const inventory = await tx.currencyInventory.findUnique({ where: { currencyCode: payment.currencyCode } });
+
+      if (inventory) {
+        let newCash = inventory.cashBalance;
+        let newBank = inventory.bankBalance;
+
+        if (payment.type === 'RECEIVED') {
+          if (isBankChannel) newBank = Math.max(0, newBank - payment.amount);
+          else newCash = Math.max(0, newCash - payment.amount);
+        } else if (payment.type === 'SENT') {
+          if (isBankChannel) newBank += payment.amount;
+          else newCash += payment.amount;
+        }
+
+        await tx.currencyInventory.update({
+          where: { currencyCode: payment.currencyCode },
+          data: {
+            cashBalance: Number(newCash.toFixed(2)),
+            bankBalance: Number(newBank.toFixed(2)),
+          },
+        });
+      }
+
+      await tx.payment.delete({ where: { id } });
+    });
+
+    return NextResponse.json({ success: true, message: 'Payment record deleted successfully' });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}

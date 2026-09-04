@@ -16,6 +16,7 @@ import {
   CreditCard,
   Receipt,
   Printer,
+  Trash2,
 } from 'lucide-react';
 
 export default function PaymentsPage() {
@@ -70,6 +71,21 @@ export default function PaymentsPage() {
     const matchingParty = data?.parties?.find((p: any) => p.type === targetType);
     if (matchingParty) {
       setPartyId(matchingParty.id);
+    }
+  };
+
+  const handleDeletePayment = async (id: string, receiptNo: string) => {
+    if (!confirm(`Are you sure you want to delete payment record ${receiptNo}? This will revert inventory balances.`)) return;
+    try {
+      const res = await fetch(`/api/payments?id=${id}`, { method: 'DELETE' });
+      const json = await res.json();
+      if (json.success) {
+        fetchPayments();
+      } else {
+        alert(json.error || 'Failed to delete payment');
+      }
+    } catch (e: any) {
+      alert(e.message || 'Error deleting payment');
     }
   };
 
@@ -370,12 +386,21 @@ export default function PaymentsPage() {
                         <span className="italic text-[11px]">{p.notes || '—'}</span>
                       </td>
                       <td className="py-3.5 px-4 text-center">
-                        <button
-                          onClick={() => setSelectedReceipt(p)}
-                          className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-medium text-[11px] transition cursor-pointer"
-                        >
-                          View Voucher
-                        </button>
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => setSelectedReceipt(p)}
+                            className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-medium text-[11px] transition cursor-pointer"
+                          >
+                            View Voucher
+                          </button>
+                          <button
+                            onClick={() => handleDeletePayment(p.id, p.receiptNo)}
+                            title="Delete payment entry"
+                            className="p-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg border border-rose-500/30 transition cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

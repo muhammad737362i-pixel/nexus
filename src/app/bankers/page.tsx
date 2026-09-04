@@ -15,6 +15,8 @@ import {
   X,
   ArrowUpRight,
   ArrowDownLeft,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 
 export default function BankersPage() {
@@ -22,9 +24,13 @@ export default function BankersPage() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // Modal State
+  // Add Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newBanker, setNewBanker] = useState({ name: '', bankDetails: '', phone: '', email: '', notes: '' });
+
+  // Edit Modal State
+  const [editingBanker, setEditingBanker] = useState<any | null>(null);
+
   const [saving, setSaving] = useState(false);
 
   // Drawer State
@@ -72,6 +78,47 @@ export default function BankersPage() {
     }
   };
 
+  const handleUpdateBanker = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingBanker || !editingBanker.name) return;
+
+    setSaving(true);
+    try {
+      const res = await fetch('/api/parties', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editingBanker),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setEditingBanker(null);
+        fetchBankers();
+      } else {
+        alert(data.error || 'Failed to update banker');
+      }
+    } catch (e: any) {
+      alert(e.message || 'Error updating banker');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteBanker = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to delete banker "${name}"? This will remove all associated custom rates and transaction logs.`)) return;
+
+    try {
+      const res = await fetch(`/api/parties?id=${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        fetchBankers();
+      } else {
+        alert(data.error || 'Failed to delete banker');
+      }
+    } catch (e: any) {
+      alert(e.message || 'Error deleting banker');
+    }
+  };
+
   const filtered = bankers.filter(
     (b) =>
       b.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -105,7 +152,7 @@ export default function BankersPage() {
 
         <button
           onClick={() => setIsAddModalOpen(true)}
-          className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold text-xs flex items-center gap-2 shadow-lg shadow-indigo-600/20 transition self-start"
+          className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold text-xs flex items-center gap-2 shadow-lg shadow-indigo-600/20 transition self-start cursor-pointer"
         >
           <Plus className="w-4 h-4" /> Add New Banker
         </button>
@@ -119,7 +166,7 @@ export default function BankersPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search banker name, IBAN, bank account details..."
-          className="bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none w-full"
+          className="bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none w-full font-medium"
         />
       </div>
 
@@ -175,21 +222,35 @@ export default function BankersPage() {
 
               <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
                 <div className="text-xs text-slate-400">
-                  Total Trades: <span className="font-bold text-white">{totalTx}</span>
+                  Trades: <span className="font-bold text-white">{totalTx}</span>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setEditingBanker(banker)}
+                    title="Edit Banker"
+                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteBanker(banker.id, banker.name)}
+                    title="Delete Banker"
+                    className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                   <Link
                     href={`/rates?partyId=${banker.id}`}
-                    className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20 text-xs font-semibold flex items-center gap-1"
-                    title="Set Custom Rates"
+                    className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20 text-xs font-semibold flex items-center gap-1"
+                    title="Set Fixed Rates"
                   >
-                    <SlidersHorizontal className="w-3.5 h-3.5" /> Rates
+                    <SlidersHorizontal className="w-3.5 h-3.5" /> Rate
                   </Link>
                   <button
                     onClick={() => setSelectedBanker(banker)}
-                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold"
+                    className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold cursor-pointer"
                   >
-                    View Ledger
+                    Ledger
                   </button>
                 </div>
               </div>
@@ -204,7 +265,7 @@ export default function BankersPage() {
           <div className="glass-card rounded-2xl p-6 border border-slate-800 w-full max-w-md space-y-4 animate-fadeIn">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="font-bold text-lg text-white">Add New Banker / Vendor</h3>
-              <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -258,16 +319,89 @@ export default function BankersPage() {
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold"
+                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-2"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer"
                 >
                   {saving && <RefreshCw className="w-4 h-4 animate-spin" />} Save Banker
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Banker Modal */}
+      {editingBanker && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="glass-card rounded-2xl p-6 border border-slate-800 w-full max-w-md space-y-4 animate-fadeIn">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-bold text-lg text-white">Edit Banker Details</h3>
+              <button onClick={() => setEditingBanker(null)} className="text-slate-400 hover:text-white cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateBanker} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-300">Banker Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={editingBanker.name}
+                  onChange={(e) => setEditingBanker({ ...editingBanker, name: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white text-xs focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-300">Bank Details / IBAN / Wallet</label>
+                <textarea
+                  value={editingBanker.bankDetails || ''}
+                  onChange={(e) => setEditingBanker({ ...editingBanker, bankDetails: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white text-xs focus:outline-none focus:border-indigo-500 h-20 font-mono"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-300">Phone Number</label>
+                <input
+                  type="text"
+                  value={editingBanker.phone || ''}
+                  onChange={(e) => setEditingBanker({ ...editingBanker, phone: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white text-xs focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-300">Email Address</label>
+                <input
+                  type="email"
+                  value={editingBanker.email || ''}
+                  onChange={(e) => setEditingBanker({ ...editingBanker, email: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white text-xs focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingBanker(null)}
+                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer"
+                >
+                  {saving && <RefreshCw className="w-4 h-4 animate-spin" />} Update Banker
                 </button>
               </div>
             </form>
@@ -284,7 +418,7 @@ export default function BankersPage() {
                 <h2 className="font-bold text-xl text-white">{selectedBanker.name}</h2>
                 <span className="text-xs text-indigo-400">Wholesale Banker Account & Settlement Ledger</span>
               </div>
-              <button onClick={() => setSelectedBanker(null)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setSelectedBanker(null)} className="text-slate-400 hover:text-white cursor-pointer">
                 <X className="w-6 h-6" />
               </button>
             </div>
