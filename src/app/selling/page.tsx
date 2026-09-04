@@ -11,8 +11,8 @@ export default function SellingPage() {
   const [currencies, setCurrencies] = useState<any[]>([]);
 
   const [selectedPartyId, setSelectedPartyId] = useState('');
-  const [fromCurrency, setFromCurrency] = useState('USD');
-  const [toCurrency, setToCurrency] = useState('INR');
+  const [fromCurrency, setFromCurrency] = useState('INR');
+  const [toCurrency, setToCurrency] = useState('USD');
   const [amountGiven, setAmountGiven] = useState<string>('2000');
   const [appliedRate, setAppliedRate] = useState<string>('89.20');
   const [isCustomRate, setIsCustomRate] = useState<boolean>(false);
@@ -48,8 +48,8 @@ export default function SellingPage() {
           setCurrencies(currJson.currencies);
           const baseCurr = currJson.currencies.find((c: any) => c.isBase) || currJson.currencies[0];
           const nonBaseCurr = currJson.currencies.find((c: any) => !c.isBase) || currJson.currencies[0];
-          if (baseCurr) setFromCurrency(baseCurr.code);
-          if (nonBaseCurr) setToCurrency(nonBaseCurr.code);
+          if (nonBaseCurr) setFromCurrency(nonBaseCurr.code);
+          if (baseCurr) setToCurrency(baseCurr.code);
         }
       } catch (e) {
         console.error(e);
@@ -60,14 +60,14 @@ export default function SellingPage() {
     loadData();
   }, []);
 
-  // Fetch effective sell rate whenever party or target selling currency changes
+  // Fetch effective sell rate whenever party or selling currency changes
   useEffect(() => {
-    if (!selectedPartyId || !toCurrency) return;
+    if (!selectedPartyId || !fromCurrency) return;
 
     async function fetchPartyRate() {
       setRateLoading(true);
       try {
-        const res = await fetch(`/api/rates?partyId=${selectedPartyId}&currencyCode=${toCurrency}`);
+        const res = await fetch(`/api/rates?partyId=${selectedPartyId}&currencyCode=${fromCurrency}`);
         const json = await res.json();
         if (json.success && json.rateInfo) {
           setAppliedRate(json.rateInfo.appliedSellRate.toString());
@@ -81,12 +81,12 @@ export default function SellingPage() {
     }
 
     fetchPartyRate();
-  }, [selectedPartyId, toCurrency]);
+  }, [selectedPartyId, fromCurrency]);
 
   const numAmount = parseFloat(amountGiven) || 0;
   const numRate = parseFloat(appliedRate) || 0;
   const numFee = parseFloat(fee) || 0;
-  const amountReceived = (numAmount * numRate).toFixed(2);
+  const amountReceived = numRate > 0 ? (numAmount / numRate).toFixed(2) : '0.00';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -279,14 +279,14 @@ export default function SellingPage() {
 
         {/* Currency Pair & Amount Input */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Selling Target Currency (To) */}
+          {/* Selling Currency (Given) */}
           <div className="space-y-2">
             <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-              Currency Selling To Party *
+              Selling Currency (Given) *
             </label>
             <select
-              value={toCurrency}
-              onChange={(e) => setToCurrency(e.target.value)}
+              value={fromCurrency}
+              onChange={(e) => setFromCurrency(e.target.value)}
               className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-indigo-500 font-bold"
             >
               {currencies
@@ -299,17 +299,17 @@ export default function SellingPage() {
             </select>
           </div>
 
-          {/* Amount Paid in USD */}
+          {/* Amount Given */}
           <div className="space-y-2">
             <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-              Base Amount Paid ($ USD) *
+              Amount Given *
             </label>
             <input
               type="number"
               step="any"
               value={amountGiven}
               onChange={(e) => setAmountGiven(e.target.value)}
-              placeholder="e.g. 2000"
+              placeholder="e.g. 5000"
               className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white font-bold text-sm focus:outline-none focus:border-indigo-500"
             />
           </div>
@@ -376,13 +376,13 @@ export default function SellingPage() {
         <div className="p-5 rounded-xl bg-slate-900/90 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <span className="text-xs text-slate-400 uppercase tracking-wider block font-semibold">
-              Foreign Currency Delivered ({toCurrency})
+              Total Calculated Payout ({toCurrency})
             </span>
             <div className="text-2xl font-extrabold text-amber-400 mt-0.5">
               {amountReceived} {toCurrency}
             </div>
             <div className="text-xs text-slate-400 mt-1">
-              Selling Rate: <span className="text-white font-mono">{appliedRate}</span>
+              Selling Rate: <span className="text-white font-mono">{appliedRate}</span> ({fromCurrency} → {toCurrency})
             </div>
           </div>
 

@@ -182,7 +182,7 @@ export async function processSellTransaction(params: {
   const party = await prisma.party.findUnique({ where: { id: partyId } });
   if (!party) throw new Error('Party not found');
 
-  const amountReceived = Number((amountGiven * appliedRate).toFixed(2));
+  const amountReceived = appliedRate > 0 ? Number((amountGiven / appliedRate).toFixed(2)) : 0;
 
   const baseCurrency = await prisma.currency.findUnique({ where: { code: toCurrency } });
   const benchmarkRate = baseCurrency?.defaultSellRate || appliedRate;
