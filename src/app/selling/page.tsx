@@ -13,7 +13,7 @@ export default function SellingPage() {
   const [selectedPartyId, setSelectedPartyId] = useState('');
   const [fromCurrency, setFromCurrency] = useState('INR');
   const [toCurrency, setToCurrency] = useState('USD');
-  const [amountGiven, setAmountGiven] = useState<string>('2000');
+  const [amountGiven, setAmountGiven] = useState<string>('');
   const [appliedRate, setAppliedRate] = useState<string>('89.20');
   const [isCustomRate, setIsCustomRate] = useState<boolean>(false);
   const [fee, setFee] = useState<string>('0');
@@ -118,6 +118,9 @@ export default function SellingPage() {
       const json = await res.json();
       if (json.success) {
         setSuccessReceipt(json.transaction);
+        setAmountGiven('');
+        setNotes('');
+        setFee('0');
       } else {
         setErrorMsg(json.error || 'Failed to execute sell transaction');
       }
@@ -173,9 +176,9 @@ export default function SellingPage() {
               <span className="font-bold text-white">{selectedParty?.name}</span>
             </div>
             <div>
-              <span className="text-slate-500 block">USD Received</span>
+              <span className="text-slate-500 block">INR Given</span>
               <span className="font-bold text-emerald-400">
-                ${successReceipt.amountGiven}
+                {successReceipt.amountGiven} {successReceipt.fromCurrency}
               </span>
             </div>
             <div>
@@ -183,7 +186,7 @@ export default function SellingPage() {
               <span className="font-bold text-amber-400">{successReceipt.appliedRate}</span>
             </div>
             <div>
-              <span className="text-slate-500 block">Foreign Currency Delivered</span>
+              <span className="text-slate-500 block">Total Payout</span>
               <span className="font-bold text-white">
                 {successReceipt.amountReceived} {successReceipt.toCurrency}
               </span>
@@ -193,7 +196,7 @@ export default function SellingPage() {
             <button
               onClick={() => {
                 setSuccessReceipt(null);
-                setAmountGiven('2000');
+                setAmountGiven('');
               }}
               className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-semibold"
             >

@@ -13,7 +13,7 @@ export default function BuyingPage() {
   const [selectedPartyId, setSelectedPartyId] = useState('');
   const [fromCurrency, setFromCurrency] = useState('INR');
   const [toCurrency, setToCurrency] = useState('USD');
-  const [amountGiven, setAmountGiven] = useState<string>('1000');
+  const [amountGiven, setAmountGiven] = useState<string>('');
   const [appliedRate, setAppliedRate] = useState<string>('88.50');
   const [isCustomRate, setIsCustomRate] = useState<boolean>(false);
   const [fee, setFee] = useState<string>('0');
@@ -60,7 +60,7 @@ export default function BuyingPage() {
     loadData();
   }, []);
 
-  // Whenever selectedPartyId or fromCurrency changes, pull effective custom rate
+  // Fetch effective buy rate whenever party or target foreign currency changes
   useEffect(() => {
     if (!selectedPartyId || !fromCurrency) return;
 
@@ -118,6 +118,9 @@ export default function BuyingPage() {
       const json = await res.json();
       if (json.success) {
         setSuccessReceipt(json.transaction);
+        setAmountGiven('');
+        setNotes('');
+        setFee('0');
       } else {
         setErrorMsg(json.error || 'Failed to execute buy transaction');
       }
@@ -140,8 +143,8 @@ export default function BuyingPage() {
 
   return (
     <div className="w-full space-y-6">
-      {/* Title */}
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
@@ -193,7 +196,7 @@ export default function BuyingPage() {
             <button
               onClick={() => {
                 setSuccessReceipt(null);
-                setAmountGiven('1000');
+                setAmountGiven('');
               }}
               className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold"
             >
