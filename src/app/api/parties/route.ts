@@ -89,7 +89,7 @@ export async function DELETE(req: Request) {
     }
 
     await prisma.$transaction(async (tx: any) => {
-      await tx.partyCustomRate.deleteMany({ where: { partyId: id } });
+      await tx.partyRate.deleteMany({ where: { partyId: id } });
       await tx.ledgerEntry.deleteMany({ where: { partyId: id } });
       await tx.payment.deleteMany({ where: { partyId: id } });
       await tx.transaction.deleteMany({ where: { partyId: id } });
