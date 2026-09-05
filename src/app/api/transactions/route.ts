@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { processBuyTransaction, processSellTransaction } from '@/lib/exchange';
+import { processBuyTransaction, processSellTransaction, calculateTradeProfit } from '@/lib/exchange';
 
 export async function GET(req: Request) {
   try {
@@ -62,24 +62,43 @@ export async function GET(req: Request) {
       orderBy: { createdAt: 'desc' },
     });
 
+    const inrCurrency = await prisma.currency.findUnique({ where: { code: 'INR' } });
+    const marketBuyRate = inrCurrency?.defaultBuyRate || 88.50;
+    const marketSellRate = inrCurrency?.defaultSellRate || 89.20;
+
     // Compute summary metrics for the filtered result set
     const totalCount = transactions.length;
     let totalBuyVolume = 0;
     let totalSellVolume = 0;
     let totalProfit = 0;
 
-    for (const tx of transactions) {
-      totalProfit += tx.totalProfit || 0;
+    const sanitizedTransactions = transactions.map((tx: any) => {
+      const usdtAmount = tx.amountReceived || (tx.appliedRate > 0 ? tx.amountGiven / tx.appliedRate : 0);
+      const cleanProfit = calculateTradeProfit(
+        tx.type as 'BUY' | 'SELL',
+        usdtAmount,
+        tx.appliedRate,
+        tx.fee || 0,
+        marketBuyRate,
+        marketSellRate
+      );
+
+      totalProfit += cleanProfit;
       if (tx.type === 'BUY') {
         totalBuyVolume += tx.amountGiven || 0;
       } else if (tx.type === 'SELL') {
         totalSellVolume += tx.amountGiven || 0;
       }
-    }
+
+      return {
+        ...tx,
+        totalProfit: cleanProfit,
+      };
+    });
 
     return NextResponse.json({
       success: true,
-      transactions,
+      transactions: sanitizedTransactions,
       metrics: {
         totalCount,
         totalBuyVolume: Number(totalBuyVolume.toFixed(2)),

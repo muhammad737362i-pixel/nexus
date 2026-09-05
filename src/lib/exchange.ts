@@ -9,7 +9,6 @@ export interface RateResult {
 
 /**
  * Calculates effective exchange rate for a given Party and Currency pair.
- * Priority: 1) Specific Party Custom Rate -> 2) Party Custom Margin % -> 3) Base Currency Default Rate.
  */
 export async function getEffectiveRateForParty(
   partyId: string,
@@ -79,16 +78,40 @@ export async function generateReceiptNo(): Promise<string> {
 }
 
 /**
+ * Helper to recalculate transaction profit accurately in INR
+ */
+export function calculateTradeProfit(
+  type: 'BUY' | 'SELL',
+  amountReceivedUSDT: number,
+  appliedRate: number,
+  fee: number = 0,
+  marketBuyRate: number = 88.50,
+  marketSellRate: number = 89.20
+): number {
+  let spread = 0;
+  if (type === 'BUY') {
+    // Profit per USDT = (Market Buy Rate - Applied Buy Rate)
+    // If bought cheaper than market rate, spread is positive.
+    spread = marketBuyRate - appliedRate;
+  } else {
+    // Profit per USDT = (Applied Sell Rate - Market Sell Rate)
+    // If sold higher than market rate, spread is positive.
+    spread = appliedRate - marketSellRate;
+  }
+
+  const profitINR = amountReceivedUSDT * spread + fee;
+  return Number(profitINR.toFixed(2));
+}
+
+/**
  * Processes Buy Transaction
- * Buyer sells USDT to exchange -> Exchange receives USDT (+USDT) and pays INR (-INR).
- * amountGiven = INR Amount
- * amountReceived = USDT Amount (amountGiven / appliedRate)
+ * Exchange buys USDT from customer -> Exchange receives USDT (+USDT) and pays INR (-INR).
  */
 export async function processBuyTransaction(params: {
   partyId: string;
   fromCurrency: string; // 'INR'
   toCurrency: string;   // 'USDT'
-  amountGiven: number;  // INR Amount paid
+  amountGiven: number;  // INR Amount paid out
   appliedRate: number;  // Rate INR per USDT
   fee?: number;
   paymentMethod?: string;
@@ -99,19 +122,15 @@ export async function processBuyTransaction(params: {
   const party = await prisma.party.findUnique({ where: { id: partyId } });
   if (!party) throw new Error('Party not found');
 
-  // Amount received in USDT = INR amountGiven / appliedRate
   const amountReceived = appliedRate > 0 ? Number((amountGiven / appliedRate).toFixed(2)) : 0;
   
-  // Profit calculation in INR: spread per USDT * USDT_amount + fee
-  const targetCurrency = await prisma.currency.findUnique({ where: { code: toCurrency === 'USDT' ? 'INR' : toCurrency } });
-  const benchmarkRate = targetCurrency?.defaultBuyRate || appliedRate;
-  const spread = Math.abs(benchmarkRate - appliedRate);
-  const totalProfit = Number((amountReceived * spread + fee).toFixed(2));
+  const inrCurrency = await prisma.currency.findUnique({ where: { code: 'INR' } });
+  const marketBuyRate = inrCurrency?.defaultBuyRate || appliedRate;
+  const totalProfit = calculateTradeProfit('BUY', amountReceived, appliedRate, fee, marketBuyRate, inrCurrency?.defaultSellRate || appliedRate);
 
   const receiptNo = await generateReceiptNo();
 
   return await prisma.$transaction(async (tx: any) => {
-    // 1. Create Transaction record
     const transaction = await tx.transaction.create({
       data: {
         receiptNo,
@@ -130,7 +149,6 @@ export async function processBuyTransaction(params: {
       },
     });
 
-    // 2. Add Party Ledger Entry (Credit party account with payout INR or USDT)
     await tx.ledgerEntry.create({
       data: {
         partyId,
@@ -143,7 +161,6 @@ export async function processBuyTransaction(params: {
       },
     });
 
-    // 3. Update Inventory holdings
     // A. Decrease INR inventory (money paid out)
     let invFrom = await tx.currencyInventory.findUnique({ where: { currencyCode: fromCurrency } });
     if (!invFrom) {
@@ -175,8 +192,6 @@ export async function processBuyTransaction(params: {
 /**
  * Processes Sell Transaction
  * Exchange sells USDT to banker/buyer -> Exchange delivers USDT (-USDT) and receives INR (+INR).
- * amountGiven = INR Amount
- * amountReceived = USDT Amount (amountGiven / appliedRate)
  */
 export async function processSellTransaction(params: {
   partyId: string;
@@ -195,15 +210,13 @@ export async function processSellTransaction(params: {
 
   const amountReceived = appliedRate > 0 ? Number((amountGiven / appliedRate).toFixed(2)) : 0;
 
-  const targetCurrency = await prisma.currency.findUnique({ where: { code: toCurrency === 'USDT' ? 'INR' : toCurrency } });
-  const benchmarkRate = targetCurrency?.defaultSellRate || appliedRate;
-  const spread = Math.abs(appliedRate - benchmarkRate);
-  const totalProfit = Number((amountReceived * spread + fee).toFixed(2));
+  const inrCurrency = await prisma.currency.findUnique({ where: { code: 'INR' } });
+  const marketSellRate = inrCurrency?.defaultSellRate || appliedRate;
+  const totalProfit = calculateTradeProfit('SELL', amountReceived, appliedRate, fee, inrCurrency?.defaultBuyRate || appliedRate, marketSellRate);
 
   const receiptNo = await generateReceiptNo();
 
   return await prisma.$transaction(async (tx: any) => {
-    // 1. Create Transaction
     const transaction = await tx.transaction.create({
       data: {
         receiptNo,
@@ -222,7 +235,6 @@ export async function processSellTransaction(params: {
       },
     });
 
-    // 2. Add Party Ledger Entry
     await tx.ledgerEntry.create({
       data: {
         partyId,
@@ -235,7 +247,6 @@ export async function processSellTransaction(params: {
       },
     });
 
-    // 3. Update Inventory holdings
     // A. Increase INR inventory (money received)
     let invFrom = await tx.currencyInventory.findUnique({ where: { currencyCode: fromCurrency } });
     if (!invFrom) {

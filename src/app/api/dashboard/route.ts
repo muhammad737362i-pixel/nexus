@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { calculateTradeProfit } from '@/lib/exchange';
 
 export async function GET(req: Request) {
   try {
@@ -26,6 +27,10 @@ export async function GET(req: Request) {
       orderBy: { createdAt: 'desc' },
     });
 
+    const inrCurrency = await prisma.currency.findUnique({ where: { code: 'INR' } });
+    const marketBuyRate = inrCurrency?.defaultBuyRate || 88.50;
+    const marketSellRate = inrCurrency?.defaultSellRate || 89.20;
+
     let buyVolume = 0;
     let sellVolume = 0;
     let estProfit = 0;
@@ -36,7 +41,19 @@ export async function GET(req: Request) {
       } else if (tx.type === 'SELL') {
         sellVolume += tx.amountGiven || 0;
       }
-      estProfit += tx.totalProfit || 0;
+
+      // Compute clean profit in INR per trade using standard market rates
+      const usdtAmount = tx.amountReceived || (tx.appliedRate > 0 ? tx.amountGiven / tx.appliedRate : 0);
+      const cleanProfit = calculateTradeProfit(
+        tx.type as 'BUY' | 'SELL',
+        usdtAmount,
+        tx.appliedRate,
+        tx.fee || 0,
+        marketBuyRate,
+        marketSellRate
+      );
+
+      estProfit += cleanProfit;
     });
 
     // 2. Total Parties Count
