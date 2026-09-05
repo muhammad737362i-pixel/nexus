@@ -152,26 +152,43 @@ export async function DELETE(req: Request) {
     }
 
     await prisma.$transaction(async (prismaTx: any) => {
-      // 1. Revert Inventory adjustments
       const isBank = tx.paymentMethod === 'BANK';
-      const invFrom = await prismaTx.currencyInventory.findUnique({ where: { currencyCode: tx.fromCurrency } });
-      if (invFrom) {
-        const field = isBank ? 'bankBalance' : 'cashBalance';
-        const newBal = Math.max(0, invFrom[field] - tx.amountGiven);
-        await prismaTx.currencyInventory.update({
-          where: { currencyCode: tx.fromCurrency },
-          data: { [field]: newBal },
-        });
-      }
+      const field = isBank ? 'bankBalance' : 'cashBalance';
 
-      const invTo = await prismaTx.currencyInventory.findUnique({ where: { currencyCode: tx.toCurrency } });
-      if (invTo) {
-        const field = isBank ? 'bankBalance' : 'cashBalance';
-        const newBal = invTo[field] + tx.amountReceived;
-        await prismaTx.currencyInventory.update({
-          where: { currencyCode: tx.toCurrency },
-          data: { [field]: newBal },
-        });
+      if (tx.type === 'BUY') {
+        // Buy USDT: Originally decreased INR and increased USDT.
+        // Revert: Add INR back and subtract USDT back.
+        const invINR = await prismaTx.currencyInventory.findUnique({ where: { currencyCode: tx.fromCurrency } });
+        if (invINR) {
+          await prismaTx.currencyInventory.update({
+            where: { currencyCode: tx.fromCurrency },
+            data: { [field]: Number((invINR[field] + tx.amountGiven).toFixed(2)) },
+          });
+        }
+        const invUSDT = await prismaTx.currencyInventory.findUnique({ where: { currencyCode: tx.toCurrency } });
+        if (invUSDT) {
+          await prismaTx.currencyInventory.update({
+            where: { currencyCode: tx.toCurrency },
+            data: { [field]: Number(Math.max(0, invUSDT[field] - tx.amountReceived).toFixed(2)) },
+          });
+        }
+      } else if (tx.type === 'SELL') {
+        // Sell USDT: Originally increased INR and decreased USDT.
+        // Revert: Subtract INR back and add USDT back.
+        const invINR = await prismaTx.currencyInventory.findUnique({ where: { currencyCode: tx.fromCurrency } });
+        if (invINR) {
+          await prismaTx.currencyInventory.update({
+            where: { currencyCode: tx.fromCurrency },
+            data: { [field]: Number(Math.max(0, invINR[field] - tx.amountGiven).toFixed(2)) },
+          });
+        }
+        const invUSDT = await prismaTx.currencyInventory.findUnique({ where: { currencyCode: tx.toCurrency } });
+        if (invUSDT) {
+          await prismaTx.currencyInventory.update({
+            where: { currencyCode: tx.toCurrency },
+            data: { [field]: Number((invUSDT[field] + tx.amountReceived).toFixed(2)) },
+          });
+        }
       }
 
       // 2. Delete Ledger Entries
@@ -210,10 +227,10 @@ export async function PUT(req: Request) {
     }
 
     const newAmountReceived = Number((numAmount / numRate).toFixed(2));
-    const baseCurrency = await prisma.currency.findUnique({ where: { code: tx.fromCurrency } });
-    const benchmarkRate = (type === 'BUY' ? baseCurrency?.defaultBuyRate : baseCurrency?.defaultSellRate) || numRate;
+    const targetCurrency = await prisma.currency.findUnique({ where: { code: 'INR' } });
+    const benchmarkRate = (type === 'BUY' ? targetCurrency?.defaultBuyRate : targetCurrency?.defaultSellRate) || numRate;
     const spread = Math.abs(numRate - benchmarkRate);
-    const totalProfit = Number((numAmount * spread + numFee).toFixed(2));
+    const totalProfit = Number((newAmountReceived * spread + numFee).toFixed(2));
 
     const updatedTx = await prisma.transaction.update({
       where: { id },

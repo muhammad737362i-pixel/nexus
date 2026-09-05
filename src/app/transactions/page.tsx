@@ -618,7 +618,7 @@ export default function TransactionsPage() {
                       {tx.amountReceived.toLocaleString('en-US')} <span className="text-slate-400 font-normal">{tx.toCurrency}</span>
                     </td>
                     <td className="py-3.5 px-4 font-bold text-emerald-400">
-                      +${tx.totalProfit.toFixed(2)}
+                      +₹{tx.totalProfit.toFixed(2)}
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">

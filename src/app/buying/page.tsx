@@ -300,17 +300,17 @@ export default function BuyingPage() {
             </select>
           </div>
 
-          {/* Amount Given */}
+          {/* Amount Given (INR) */}
           <div className="space-y-2">
             <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-              Amount Given *
+              Amount in INR (₹) Paid Out *
             </label>
             <input
               type="number"
               step="any"
               value={amountGiven}
               onChange={(e) => setAmountGiven(e.target.value)}
-              placeholder="e.g. 5000"
+              placeholder="e.g. 100000"
               className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white font-bold text-sm focus:outline-none focus:border-indigo-500"
             />
           </div>
@@ -348,7 +348,7 @@ export default function BuyingPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
             <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-              Processing Fee / Commission ($)
+              Processing Fee / Commission (₹)
             </label>
             <input
               type="number"
@@ -377,13 +377,13 @@ export default function BuyingPage() {
         <div className="p-5 rounded-xl bg-slate-900/90 border border-indigo-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <span className="text-xs text-slate-400 uppercase tracking-wider block font-semibold">
-              Total Calculated Payout ({toCurrency})
+              Total Calculated USDT Received ({toCurrency})
             </span>
             <div className="text-2xl font-extrabold text-emerald-400 mt-0.5">
               {amountReceived} {toCurrency}
             </div>
             <div className="text-xs text-slate-400 mt-1">
-              Rate: <span className="text-white font-mono">{appliedRate}</span> ({fromCurrency} → {toCurrency})
+              Rate: <span className="text-white font-mono">1 {toCurrency} = ₹{appliedRate}</span>
             </div>
           </div>
 

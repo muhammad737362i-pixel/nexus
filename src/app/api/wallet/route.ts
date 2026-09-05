@@ -16,27 +16,24 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     });
 
-    // Compute Base Valuation (Main Balance in USD or Base Currency)
-    const baseCurrency = currencies.find((c: any) => c.isBase) || { code: 'USD', defaultBuyRate: 1 };
+    // Compute Base Valuation (Main Balance in INR)
+    const inrCurrency = currencies.find((c: any) => c.code === 'INR') || { defaultSellRate: 89.20 };
+    const inrRate = inrCurrency.defaultSellRate || 89.20;
     
-    let totalCashValuation = 0;
-    let totalBankValuation = 0;
-
-    const currencyMap = new Map();
-    currencies.forEach((c: any) => {
-      currencyMap.set(c.code, c);
-    });
+    let totalCashValuation = 0; // In INR
+    let totalBankValuation = 0; // In INR
 
     inventories.forEach((inv: any) => {
-      const curr = currencyMap.get(inv.currencyCode);
-      const rate = curr ? (curr.isBase ? 1 : curr.defaultBuyRate) : 1;
-      
-      // Valuate in base currency units
-      const cashInBase = curr?.isBase ? inv.cashBalance : inv.cashBalance / (rate || 1);
-      const bankInBase = curr?.isBase ? inv.bankBalance : inv.bankBalance / (rate || 1);
-
-      totalCashValuation += cashInBase;
-      totalBankValuation += bankInBase;
+      if (inv.currencyCode === 'INR') {
+        totalCashValuation += inv.cashBalance;
+        totalBankValuation += inv.bankBalance;
+      } else if (inv.currencyCode === 'USDT' || inv.currencyCode === 'USD') {
+        totalCashValuation += inv.cashBalance * inrRate;
+        totalBankValuation += inv.bankBalance * inrRate;
+      } else {
+        totalCashValuation += inv.cashBalance;
+        totalBankValuation += inv.bankBalance;
+      }
     });
 
     const totalMainBalance = totalCashValuation + totalBankValuation;
@@ -47,7 +44,7 @@ export async function GET() {
         totalMainBalance: Number(totalMainBalance.toFixed(2)),
         totalCashValuation: Number(totalCashValuation.toFixed(2)),
         totalBankValuation: Number(totalBankValuation.toFixed(2)),
-        baseCurrencyCode: baseCurrency.code,
+        baseCurrencyCode: 'INR',
       },
       inventories,
       currencies,
