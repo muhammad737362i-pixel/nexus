@@ -423,9 +423,6 @@ export default function Dashboard() {
                       <div className="font-bold text-xs text-white">
                         {tx.amountGiven.toLocaleString('en-US')} {tx.fromCurrency}
                       </div>
-                      <div className="text-[10px] text-emerald-400 font-medium font-mono">
-                        +${tx.totalProfit?.toFixed(2)} USDT profit
-                      </div>
                     </div>
                   </div>
                 ))

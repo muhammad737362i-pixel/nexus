@@ -78,7 +78,8 @@ export async function generateReceiptNo(): Promise<string> {
 }
 
 /**
- * Calculates trade profit strictly in USDT ($)
+ * Calculates trade profit strictly in USDT ($).
+ * Single un-paired trades or trades with 0 margin return fee (or 0).
  */
 export function calculateTradeProfit(
   type: 'BUY' | 'SELL',
@@ -88,23 +89,23 @@ export function calculateTradeProfit(
   marketBuyRate: number = 100,
   marketSellRate: number = 100
 ): number {
-  if (appliedRate <= 0) return 0;
+  if (appliedRate <= 0 || amountGivenINR <= 0) return Number(feeUSDT.toFixed(2));
   
   const usdtAmount = amountGivenINR / appliedRate;
 
+  // If appliedRate is equal to or close to market rate, profit is fee
+  const benchmarkRate = type === 'BUY' ? marketBuyRate : marketSellRate;
+  if (Math.abs(appliedRate - benchmarkRate) < 0.001) {
+    return Number(feeUSDT.toFixed(2));
+  }
+
   let profitUSDT = 0;
   if (type === 'BUY') {
-    // BUY Trade: We received usdtAmount (amountGivenINR / appliedRate).
-    // Benchmark USDT we would receive at market buy rate = (amountGivenINR / marketBuyRate).
-    // If appliedRate < marketBuyRate, we got MORE USDT for the same INR amount!
     const benchmarkUSDT = marketBuyRate > 0 ? amountGivenINR / marketBuyRate : usdtAmount;
-    profitUSDT = usdtAmount - benchmarkUSDT + feeUSDT;
+    profitUSDT = Math.max(0, usdtAmount - benchmarkUSDT) + feeUSDT;
   } else {
-    // SELL Trade: We collected amountGivenINR and delivered usdtAmount (amountGivenINR / appliedRate).
-    // Benchmark USDT we would deliver at market sell rate = (amountGivenINR / marketSellRate).
-    // If appliedRate > marketSellRate, we delivered LESS USDT for the same INR amount!
     const benchmarkUSDT = marketSellRate > 0 ? amountGivenINR / marketSellRate : usdtAmount;
-    profitUSDT = benchmarkUSDT - usdtAmount + feeUSDT;
+    profitUSDT = Math.max(0, benchmarkUSDT - usdtAmount) + feeUSDT;
   }
 
   return Number(profitUSDT.toFixed(2));
