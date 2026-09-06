@@ -35,7 +35,7 @@ export async function GET(req: Request) {
     let sellVolume = 0;
     let estProfitUSDT = 0;
 
-    periodTransactions.forEach((tx: any) => {
+    const sanitizedTransactions = periodTransactions.map((tx: any) => {
       if (tx.type === 'BUY') {
         buyVolume += tx.amountGiven || 0;
       } else if (tx.type === 'SELL') {
@@ -53,6 +53,11 @@ export async function GET(req: Request) {
       );
 
       estProfitUSDT += cleanProfit;
+
+      return {
+        ...tx,
+        totalProfit: cleanProfit,
+      };
     });
 
     // 2. Total Parties Count
@@ -69,8 +74,8 @@ export async function GET(req: Request) {
       orderBy: { code: 'asc' },
     });
 
-    // 5. Recent 10 Transactions in range
-    const recentTransactions = periodTransactions.slice(0, 10);
+    // 5. Recent 10 Transactions in range (with sanitized totalProfit)
+    const recentTransactions = sanitizedTransactions.slice(0, 10);
 
     return NextResponse.json({
       success: true,
