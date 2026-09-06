@@ -89,26 +89,7 @@ export function calculateTradeProfit(
   marketBuyRate: number = 100,
   marketSellRate: number = 100
 ): number {
-  if (appliedRate <= 0 || amountGivenINR <= 0) return Number(feeUSDT.toFixed(2));
-  
-  const usdtAmount = amountGivenINR / appliedRate;
-
-  // If appliedRate is equal to or close to market rate, profit is fee
-  const benchmarkRate = type === 'BUY' ? marketBuyRate : marketSellRate;
-  if (Math.abs(appliedRate - benchmarkRate) < 0.001) {
-    return Number(feeUSDT.toFixed(2));
-  }
-
-  let profitUSDT = 0;
-  if (type === 'BUY') {
-    const benchmarkUSDT = marketBuyRate > 0 ? amountGivenINR / marketBuyRate : usdtAmount;
-    profitUSDT = Math.max(0, usdtAmount - benchmarkUSDT) + feeUSDT;
-  } else {
-    const benchmarkUSDT = marketSellRate > 0 ? amountGivenINR / marketSellRate : usdtAmount;
-    profitUSDT = Math.max(0, benchmarkUSDT - usdtAmount) + feeUSDT;
-  }
-
-  return Number(profitUSDT.toFixed(2));
+  return Number((feeUSDT || 0).toFixed(2));
 }
 
 /**

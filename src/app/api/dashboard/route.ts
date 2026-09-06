@@ -35,10 +35,12 @@ export async function GET(req: Request) {
     let buyVolumeUSDT = 0;
     let sellVolumeINR = 0;
     let sellVolumeUSDT = 0;
-    let estProfitUSDT = 0;
+    let totalFeesUSDT = 0;
 
     const sanitizedTransactions = periodTransactions.map((tx: any) => {
       const usdtAmt = tx.amountReceived || (tx.appliedRate > 0 ? tx.amountGiven / tx.appliedRate : 0);
+      const fee = tx.fee || 0;
+      totalFeesUSDT += fee;
 
       if (tx.type === 'BUY') {
         buyVolumeINR += tx.amountGiven || 0;
@@ -48,23 +50,17 @@ export async function GET(req: Request) {
         sellVolumeUSDT += usdtAmt;
       }
 
-      // Calculate clean profit in USDT ($)
-      const cleanProfit = calculateTradeProfit(
-        tx.type as 'BUY' | 'SELL',
-        tx.amountGiven,
-        tx.appliedRate,
-        tx.fee || 0,
-        marketBuyRate,
-        marketSellRate
-      );
-
-      estProfitUSDT += cleanProfit;
+      const cleanProfit = fee;
 
       return {
         ...tx,
         totalProfit: cleanProfit,
       };
     });
+
+    const estProfitUSDT = (buyVolumeUSDT > 0 && sellVolumeUSDT > 0)
+      ? Number((buyVolumeUSDT - sellVolumeUSDT + totalFeesUSDT).toFixed(2))
+      : Number(totalFeesUSDT.toFixed(2));
 
     // 2. Total Parties Count
     const customerCount = await prisma.party.count({ where: { type: 'CUSTOMER' } });

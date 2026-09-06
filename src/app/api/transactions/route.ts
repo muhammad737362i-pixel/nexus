@@ -68,26 +68,26 @@ export async function GET(req: Request) {
 
     // Compute summary metrics for the filtered result set
     const totalCount = transactions.length;
-    let totalBuyVolume = 0;
-    let totalSellVolume = 0;
-    let totalProfit = 0;
+    let totalBuyVolumeINR = 0;
+    let totalBuyVolumeUSDT = 0;
+    let totalSellVolumeINR = 0;
+    let totalSellVolumeUSDT = 0;
+    let totalFeesUSDT = 0;
 
     const sanitizedTransactions = transactions.map((tx: any) => {
-      const cleanProfit = calculateTradeProfit(
-        tx.type as 'BUY' | 'SELL',
-        tx.amountGiven,
-        tx.appliedRate,
-        tx.fee || 0,
-        marketBuyRate,
-        marketSellRate
-      );
+      const usdtAmt = tx.amountReceived || (tx.appliedRate > 0 ? tx.amountGiven / tx.appliedRate : 0);
+      const fee = tx.fee || 0;
+      totalFeesUSDT += fee;
 
-      totalProfit += cleanProfit;
       if (tx.type === 'BUY') {
-        totalBuyVolume += tx.amountGiven || 0;
+        totalBuyVolumeINR += tx.amountGiven || 0;
+        totalBuyVolumeUSDT += usdtAmt;
       } else if (tx.type === 'SELL') {
-        totalSellVolume += tx.amountGiven || 0;
+        totalSellVolumeINR += tx.amountGiven || 0;
+        totalSellVolumeUSDT += usdtAmt;
       }
+
+      const cleanProfit = fee;
 
       return {
         ...tx,
@@ -95,14 +95,20 @@ export async function GET(req: Request) {
       };
     });
 
+    const netProfitUSDT = (totalBuyVolumeUSDT > 0 && totalSellVolumeUSDT > 0)
+      ? Number((totalBuyVolumeUSDT - totalSellVolumeUSDT + totalFeesUSDT).toFixed(2))
+      : Number(totalFeesUSDT.toFixed(2));
+
     return NextResponse.json({
       success: true,
       transactions: sanitizedTransactions,
       metrics: {
         totalCount,
-        totalBuyVolume: Number(totalBuyVolume.toFixed(2)),
-        totalSellVolume: Number(totalSellVolume.toFixed(2)),
-        totalProfit: Number(totalProfit.toFixed(2)),
+        totalBuyVolume: Number(totalBuyVolumeINR.toFixed(2)),
+        totalBuyVolumeUSDT: Number(totalBuyVolumeUSDT.toFixed(2)),
+        totalSellVolume: Number(totalSellVolumeINR.toFixed(2)),
+        totalSellVolumeUSDT: Number(totalSellVolumeUSDT.toFixed(2)),
+        totalProfit: netProfitUSDT,
       },
     });
   } catch (error: any) {
