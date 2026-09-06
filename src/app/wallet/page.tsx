@@ -599,6 +599,8 @@ export default function WalletPage() {
             </form>
           </div>
         </div>
+      )}
+
       {/* Edit Wallet Transaction Modal */}
       {editingTx && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
