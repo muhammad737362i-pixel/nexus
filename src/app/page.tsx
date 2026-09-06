@@ -242,7 +242,10 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="text-2xl font-bold text-white">
-            ₹{metrics.todayBuyVolume?.toLocaleString('en-IN', { minimumFractionDigits: 2 })} <span className="text-xs text-slate-400 font-normal">INR</span>
+            {(metrics.todayBuyVolumeUSDT || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs text-emerald-400 font-semibold">USDT</span>
+          </div>
+          <div className="text-xs text-slate-400 font-medium mt-0.5">
+            (₹{(metrics.todayBuyVolumeINR || metrics.todayBuyVolume || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} INR)
           </div>
           <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
             <TrendingUp className="w-3.5 h-3.5" /> Express Buy Payouts ({metrics.totalTxCount || 0} trades)
@@ -261,7 +264,10 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="text-2xl font-bold text-white">
-            ₹{metrics.todaySellVolume?.toLocaleString('en-IN', { minimumFractionDigits: 2 })} <span className="text-xs text-slate-400 font-normal">INR</span>
+            {(metrics.todaySellVolumeUSDT || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs text-amber-400 font-semibold">USDT</span>
+          </div>
+          <div className="text-xs text-slate-400 font-medium mt-0.5">
+            (₹{(metrics.todaySellVolumeINR || metrics.todaySellVolume || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} INR)
           </div>
           <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-400 font-medium">
             <TrendingUp className="w-3.5 h-3.5" /> Express Sell Receipts ({metrics.totalTxCount || 0} trades)

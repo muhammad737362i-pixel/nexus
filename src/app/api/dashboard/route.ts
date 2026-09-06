@@ -31,15 +31,21 @@ export async function GET(req: Request) {
     const marketBuyRate = inrCurrency?.defaultBuyRate || 100;
     const marketSellRate = inrCurrency?.defaultSellRate || 100;
 
-    let buyVolume = 0;
-    let sellVolume = 0;
+    let buyVolumeINR = 0;
+    let buyVolumeUSDT = 0;
+    let sellVolumeINR = 0;
+    let sellVolumeUSDT = 0;
     let estProfitUSDT = 0;
 
     const sanitizedTransactions = periodTransactions.map((tx: any) => {
+      const usdtAmt = tx.amountReceived || (tx.appliedRate > 0 ? tx.amountGiven / tx.appliedRate : 0);
+
       if (tx.type === 'BUY') {
-        buyVolume += tx.amountGiven || 0;
+        buyVolumeINR += tx.amountGiven || 0;
+        buyVolumeUSDT += usdtAmt;
       } else if (tx.type === 'SELL') {
-        sellVolume += tx.amountGiven || 0;
+        sellVolumeINR += tx.amountGiven || 0;
+        sellVolumeUSDT += usdtAmt;
       }
 
       // Calculate clean profit in USDT ($)
@@ -80,8 +86,12 @@ export async function GET(req: Request) {
     return NextResponse.json({
       success: true,
       metrics: {
-        todayBuyVolume: Number(buyVolume.toFixed(2)),
-        todaySellVolume: Number(sellVolume.toFixed(2)),
+        todayBuyVolume: Number(buyVolumeINR.toFixed(2)),
+        todayBuyVolumeINR: Number(buyVolumeINR.toFixed(2)),
+        todayBuyVolumeUSDT: Number(buyVolumeUSDT.toFixed(2)),
+        todaySellVolume: Number(sellVolumeINR.toFixed(2)),
+        todaySellVolumeINR: Number(sellVolumeINR.toFixed(2)),
+        todaySellVolumeUSDT: Number(sellVolumeUSDT.toFixed(2)),
         todayEstProfit: Number(estProfitUSDT.toFixed(2)),
         customerCount,
         bankerCount,
