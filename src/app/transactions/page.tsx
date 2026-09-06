@@ -367,7 +367,7 @@ export default function TransactionsPage() {
               Filtered Est. Profit
             </span>
             <div className="text-xl font-extrabold text-emerald-400 mt-1">
-              +${metrics.totalProfit.toFixed(2)}
+              +${metrics.totalProfit.toFixed(2)} USDT
             </div>
           </div>
           <div className="p-3 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20">
@@ -618,7 +618,7 @@ export default function TransactionsPage() {
                       {tx.amountReceived.toLocaleString('en-US')} <span className="text-slate-400 font-normal">{tx.toCurrency}</span>
                     </td>
                     <td className="py-3.5 px-4 font-bold text-emerald-400">
-                      +₹{tx.totalProfit.toFixed(2)}
+                      +${tx.totalProfit.toFixed(2)} USDT
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">

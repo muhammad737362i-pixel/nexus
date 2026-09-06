@@ -28,12 +28,12 @@ export async function GET(req: Request) {
     });
 
     const inrCurrency = await prisma.currency.findUnique({ where: { code: 'INR' } });
-    const marketBuyRate = inrCurrency?.defaultBuyRate || 88.50;
-    const marketSellRate = inrCurrency?.defaultSellRate || 89.20;
+    const marketBuyRate = inrCurrency?.defaultBuyRate || 100;
+    const marketSellRate = inrCurrency?.defaultSellRate || 100;
 
     let buyVolume = 0;
     let sellVolume = 0;
-    let estProfit = 0;
+    let estProfitUSDT = 0;
 
     periodTransactions.forEach((tx: any) => {
       if (tx.type === 'BUY') {
@@ -42,18 +42,17 @@ export async function GET(req: Request) {
         sellVolume += tx.amountGiven || 0;
       }
 
-      // Compute clean profit in INR per trade using standard market rates
-      const usdtAmount = tx.amountReceived || (tx.appliedRate > 0 ? tx.amountGiven / tx.appliedRate : 0);
+      // Calculate clean profit in USDT ($)
       const cleanProfit = calculateTradeProfit(
         tx.type as 'BUY' | 'SELL',
-        usdtAmount,
+        tx.amountGiven,
         tx.appliedRate,
         tx.fee || 0,
         marketBuyRate,
         marketSellRate
       );
 
-      estProfit += cleanProfit;
+      estProfitUSDT += cleanProfit;
     });
 
     // 2. Total Parties Count
@@ -78,7 +77,7 @@ export async function GET(req: Request) {
       metrics: {
         todayBuyVolume: Number(buyVolume.toFixed(2)),
         todaySellVolume: Number(sellVolume.toFixed(2)),
-        todayEstProfit: Number(estProfit.toFixed(2)),
+        todayEstProfit: Number(estProfitUSDT.toFixed(2)),
         customerCount,
         bankerCount,
         totalTxCount: periodTransactions.length,

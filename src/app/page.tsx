@@ -280,7 +280,7 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="text-2xl font-bold text-emerald-400">
-            +₹{metrics.todayEstProfit?.toLocaleString('en-IN', { minimumFractionDigits: 2 })} <span className="text-xs text-emerald-300/80 font-normal">INR</span>
+            +${metrics.todayEstProfit?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs text-emerald-300/80 font-normal">USDT</span>
           </div>
           <div className="mt-2 flex items-center gap-1.5 text-xs text-indigo-300 font-medium">
             Spread + Fees Earned ({getMetricLabelPrefix()})

@@ -63,8 +63,8 @@ export async function GET(req: Request) {
     });
 
     const inrCurrency = await prisma.currency.findUnique({ where: { code: 'INR' } });
-    const marketBuyRate = inrCurrency?.defaultBuyRate || 88.50;
-    const marketSellRate = inrCurrency?.defaultSellRate || 89.20;
+    const marketBuyRate = inrCurrency?.defaultBuyRate || 100;
+    const marketSellRate = inrCurrency?.defaultSellRate || 100;
 
     // Compute summary metrics for the filtered result set
     const totalCount = transactions.length;
@@ -73,10 +73,9 @@ export async function GET(req: Request) {
     let totalProfit = 0;
 
     const sanitizedTransactions = transactions.map((tx: any) => {
-      const usdtAmount = tx.amountReceived || (tx.appliedRate > 0 ? tx.amountGiven / tx.appliedRate : 0);
       const cleanProfit = calculateTradeProfit(
         tx.type as 'BUY' | 'SELL',
-        usdtAmount,
+        tx.amountGiven,
         tx.appliedRate,
         tx.fee || 0,
         marketBuyRate,
@@ -247,9 +246,16 @@ export async function PUT(req: Request) {
 
     const newAmountReceived = Number((numAmount / numRate).toFixed(2));
     const targetCurrency = await prisma.currency.findUnique({ where: { code: 'INR' } });
-    const benchmarkRate = (type === 'BUY' ? targetCurrency?.defaultBuyRate : targetCurrency?.defaultSellRate) || numRate;
-    const spread = Math.abs(numRate - benchmarkRate);
-    const totalProfit = Number((newAmountReceived * spread + numFee).toFixed(2));
+    const marketBuyRate = targetCurrency?.defaultBuyRate || 100;
+    const marketSellRate = targetCurrency?.defaultSellRate || 100;
+    const totalProfit = calculateTradeProfit(
+      (type || tx.type) as 'BUY' | 'SELL',
+      numAmount,
+      numRate,
+      numFee,
+      marketBuyRate,
+      marketSellRate
+    );
 
     const updatedTx = await prisma.transaction.update({
       where: { id },

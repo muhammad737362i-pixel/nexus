@@ -78,29 +78,36 @@ export async function generateReceiptNo(): Promise<string> {
 }
 
 /**
- * Helper to recalculate transaction profit accurately in INR
+ * Calculates trade profit strictly in USDT ($)
  */
 export function calculateTradeProfit(
   type: 'BUY' | 'SELL',
-  amountReceivedUSDT: number,
+  amountGivenINR: number,
   appliedRate: number,
-  fee: number = 0,
-  marketBuyRate: number = 88.50,
-  marketSellRate: number = 89.20
+  feeUSDT: number = 0,
+  marketBuyRate: number = 100,
+  marketSellRate: number = 100
 ): number {
-  let spread = 0;
+  if (appliedRate <= 0) return 0;
+  
+  const usdtAmount = amountGivenINR / appliedRate;
+
+  let profitUSDT = 0;
   if (type === 'BUY') {
-    // Profit per USDT = (Market Buy Rate - Applied Buy Rate)
-    // If bought cheaper than market rate, spread is positive.
-    spread = marketBuyRate - appliedRate;
+    // BUY Trade: We received usdtAmount (amountGivenINR / appliedRate).
+    // Benchmark USDT we would receive at market buy rate = (amountGivenINR / marketBuyRate).
+    // If appliedRate < marketBuyRate, we got MORE USDT for the same INR amount!
+    const benchmarkUSDT = marketBuyRate > 0 ? amountGivenINR / marketBuyRate : usdtAmount;
+    profitUSDT = usdtAmount - benchmarkUSDT + feeUSDT;
   } else {
-    // Profit per USDT = (Applied Sell Rate - Market Sell Rate)
-    // If sold higher than market rate, spread is positive.
-    spread = appliedRate - marketSellRate;
+    // SELL Trade: We collected amountGivenINR and delivered usdtAmount (amountGivenINR / appliedRate).
+    // Benchmark USDT we would deliver at market sell rate = (amountGivenINR / marketSellRate).
+    // If appliedRate > marketSellRate, we delivered LESS USDT for the same INR amount!
+    const benchmarkUSDT = marketSellRate > 0 ? amountGivenINR / marketSellRate : usdtAmount;
+    profitUSDT = benchmarkUSDT - usdtAmount + feeUSDT;
   }
 
-  const profitINR = amountReceivedUSDT * spread + fee;
-  return Number(profitINR.toFixed(2));
+  return Number(profitUSDT.toFixed(2));
 }
 
 /**
@@ -126,7 +133,7 @@ export async function processBuyTransaction(params: {
   
   const inrCurrency = await prisma.currency.findUnique({ where: { code: 'INR' } });
   const marketBuyRate = inrCurrency?.defaultBuyRate || appliedRate;
-  const totalProfit = calculateTradeProfit('BUY', amountReceived, appliedRate, fee, marketBuyRate, inrCurrency?.defaultSellRate || appliedRate);
+  const totalProfit = calculateTradeProfit('BUY', amountGiven, appliedRate, fee, marketBuyRate, inrCurrency?.defaultSellRate || appliedRate);
 
   const receiptNo = await generateReceiptNo();
 
@@ -212,7 +219,7 @@ export async function processSellTransaction(params: {
 
   const inrCurrency = await prisma.currency.findUnique({ where: { code: 'INR' } });
   const marketSellRate = inrCurrency?.defaultSellRate || appliedRate;
-  const totalProfit = calculateTradeProfit('SELL', amountReceived, appliedRate, fee, inrCurrency?.defaultBuyRate || appliedRate, marketSellRate);
+  const totalProfit = calculateTradeProfit('SELL', amountGiven, appliedRate, fee, inrCurrency?.defaultBuyRate || appliedRate, marketSellRate);
 
   const receiptNo = await generateReceiptNo();
 
