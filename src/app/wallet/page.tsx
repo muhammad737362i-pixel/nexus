@@ -15,6 +15,9 @@ import {
   Clock,
   ShieldCheck,
   Building,
+  MoreVertical,
+  Trash2,
+  Edit2,
 } from 'lucide-react';
 
 export default function WalletPage() {
@@ -25,6 +28,10 @@ export default function WalletPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  // Edit state
+  const [editingTx, setEditingTx] = useState<any | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+
   // Modal Form State
   const [actionType, setActionType] = useState<string>('CAPITAL_DEPOSIT');
   const [selectedCurrency, setSelectedCurrency] = useState<string>('USD');
@@ -32,6 +39,55 @@ export default function WalletPage() {
   const [paymentMethod, setPaymentMethod] = useState<string>('CASH');
   const [sourceOrDestination, setSourceOrDestination] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
+
+  const handleDeleteWalletTx = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this capital transaction? This will revert inventory balance.')) return;
+    try {
+      const res = await fetch(`/api/wallet?id=${id}`, { method: 'DELETE' });
+      const json = await res.json();
+      if (json.success) {
+        fetchWallet();
+        if (editingTx?.id === id) setEditingTx(null);
+      } else {
+        alert(json.error || 'Failed to delete transaction');
+      }
+    } catch (e: any) {
+      alert(e.message || 'Error deleting transaction');
+    }
+  };
+
+  const handleEditWalletSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTx) return;
+    setEditSaving(true);
+    try {
+      const res = await fetch('/api/wallet', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingTx.id,
+          type: editingTx.type,
+          currencyCode: editingTx.currencyCode,
+          amount: parseFloat(editingTx.amount),
+          paymentMethod: editingTx.paymentMethod,
+          sourceOrDestination: editingTx.sourceOrDestination,
+          notes: editingTx.notes,
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        setEditingTx(null);
+        await fetchWallet();
+      } else {
+        alert(json.error || 'Failed to update transaction');
+      }
+    } catch (e: any) {
+      alert(e.message || 'Error updating transaction');
+    } finally {
+      setEditSaving(false);
+    }
+  };
 
   const fetchWallet = async () => {
     try {
@@ -326,12 +382,13 @@ export default function WalletPage() {
                 <th className="py-3 px-4">Amount</th>
                 <th className="py-3 px-4">Source / Destination</th>
                 <th className="py-3 px-4">Notes</th>
+                <th className="py-3 px-4 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
               {transactions.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-xs text-slate-500">
+                  <td colSpan={7} className="py-8 text-center text-xs text-slate-500">
                     No capital transactions recorded yet. Click "Add Money / Inject Capital" to begin.
                   </td>
                 </tr>
@@ -376,6 +433,15 @@ export default function WalletPage() {
                       </td>
                       <td className="py-3 px-4 text-slate-300 font-medium">{tx.sourceOrDestination || '—'}</td>
                       <td className="py-3 px-4 text-slate-400 italic">{tx.notes || '—'}</td>
+                      <td className="py-3 px-4 text-center">
+                        <button
+                          onClick={() => setEditingTx({ ...tx })}
+                          title="Edit or Delete transaction"
+                          className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 transition cursor-pointer"
+                        >
+                          <MoreVertical className="w-4 h-4" />
+                        </button>
+                      </td>
                     </tr>
                   );
                 })
@@ -529,6 +595,145 @@ export default function WalletPage() {
                 >
                   {submitting ? 'Recording...' : 'Confirm & Update Balance'}
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      {/* Edit Wallet Transaction Modal */}
+      {editingTx && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
+          <div className="glass-card rounded-2xl w-full max-w-lg p-6 border border-slate-800 shadow-2xl relative space-y-5 bg-slate-900">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Edit2 className="w-5 h-5 text-indigo-400" /> Edit Capital / Wallet Record
+              </h3>
+              <button
+                onClick={() => setEditingTx(null)}
+                className="text-slate-400 hover:text-white text-lg font-bold px-2 py-0.5 rounded-lg hover:bg-slate-800"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleEditWalletSubmit} className="space-y-4 text-xs">
+              {/* Category */}
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
+                  Transaction Category
+                </label>
+                <select
+                  value={editingTx.type || 'CAPITAL_DEPOSIT'}
+                  onChange={(e) => setEditingTx({ ...editingTx, type: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white font-medium focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="CAPITAL_DEPOSIT">➕ Add Capital / Deposit Money (Owner Investment)</option>
+                  <option value="CAPITAL_WITHDRAWAL">➖ Withdraw Capital (Owner Draw / Expense)</option>
+                  <option value="TRANSFER_CASH_TO_BANK">⇆ Transfer Funds: Cash Safe → Bank Account</option>
+                  <option value="TRANSFER_BANK_TO_CASH">⇆ Transfer Funds: Bank Account → Cash Safe</option>
+                  <option value="ADJUSTMENT">⚙ Audit Balance Adjustment</option>
+                </select>
+              </div>
+
+              {/* Currency & Amount */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
+                    Currency
+                  </label>
+                  <select
+                    value={editingTx.currencyCode || 'USD'}
+                    onChange={(e) => setEditingTx({ ...editingTx, currencyCode: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white font-medium focus:outline-none focus:border-indigo-500"
+                  >
+                    {currencies.map((c: any) => (
+                      <option key={c.code} value={c.code}>
+                        {c.code} - {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
+                    Amount
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={editingTx.amount || ''}
+                    onChange={(e) => setEditingTx({ ...editingTx, amount: e.target.value })}
+                    required
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white font-bold focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {/* Payment Channel */}
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
+                  Target Account / Safe
+                </label>
+                <select
+                  value={editingTx.paymentMethod || 'CASH'}
+                  onChange={(e) => setEditingTx({ ...editingTx, paymentMethod: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white font-medium focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="CASH">💵 Cash Safe / Vault</option>
+                  <option value="BANK">🏛️ Bank Account / Digital Liquidity</option>
+                </select>
+              </div>
+
+              {/* Source/Destination */}
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
+                  Source / Reference Info
+                </label>
+                <input
+                  type="text"
+                  value={editingTx.sourceOrDestination || ''}
+                  onChange={(e) => setEditingTx({ ...editingTx, sourceOrDestination: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
+                  Internal Notes
+                </label>
+                <textarea
+                  rows={2}
+                  value={editingTx.notes || ''}
+                  onChange={(e) => setEditingTx({ ...editingTx, notes: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="pt-3 flex items-center justify-between border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => handleDeleteWalletTx(editingTx.id)}
+                  className="px-4 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-xl font-bold flex items-center gap-1.5 border border-rose-500/30 transition cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" /> Delete Record
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingTx(null)}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={editSaving}
+                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition disabled:opacity-50 cursor-pointer"
+                  >
+                    {editSaving ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

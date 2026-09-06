@@ -230,3 +230,104 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
+
+export async function PUT(req: Request) {
+  try {
+    const body = await req.json();
+    const { id, type, partyId, amount, currencyCode, paymentMethod, referenceNo, notes } = body;
+
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'Payment ID is required' }, { status: 400 });
+    }
+
+    const oldPayment = await prisma.payment.findUnique({ where: { id } });
+    if (!oldPayment) {
+      return NextResponse.json({ success: false, error: 'Payment record not found' }, { status: 404 });
+    }
+
+    const newType = type || oldPayment.type;
+    const newPartyId = partyId || oldPayment.partyId;
+    const newAmount = amount !== undefined && amount !== null ? parseFloat(amount) : oldPayment.amount;
+    const newCurrency = currencyCode || oldPayment.currencyCode;
+    const newMethod = paymentMethod || oldPayment.paymentMethod;
+
+    if (isNaN(newAmount) || newAmount <= 0) {
+      return NextResponse.json({ success: false, error: 'Valid positive payment amount required' }, { status: 400 });
+    }
+
+    const updatedPayment = await prisma.$transaction(async (tx: any) => {
+      // 1. Revert Old Inventory Impact
+      const oldIsBank = ['BANK', 'ONLINE', 'CHEQUE'].includes((oldPayment.paymentMethod || '').toUpperCase());
+      const oldInv = await tx.currencyInventory.findUnique({ where: { currencyCode: oldPayment.currencyCode } });
+
+      if (oldInv) {
+        let revCash = oldInv.cashBalance;
+        let revBank = oldInv.bankBalance;
+
+        if (oldPayment.type === 'RECEIVED') {
+          if (oldIsBank) revBank = Math.max(0, revBank - oldPayment.amount);
+          else revCash = Math.max(0, revCash - oldPayment.amount);
+        } else if (oldPayment.type === 'SENT') {
+          if (oldIsBank) revBank += oldPayment.amount;
+          else revCash += oldPayment.amount;
+        }
+
+        await tx.currencyInventory.update({
+          where: { currencyCode: oldPayment.currencyCode },
+          data: {
+            cashBalance: Number(revCash.toFixed(2)),
+            bankBalance: Number(revBank.toFixed(2)),
+          },
+        });
+      }
+
+      // 2. Apply New Inventory Impact
+      let newInv = await tx.currencyInventory.findUnique({ where: { currencyCode: newCurrency } });
+      if (!newInv) {
+        newInv = await tx.currencyInventory.create({
+          data: { currencyCode: newCurrency, cashBalance: 0, bankBalance: 0 },
+        });
+      }
+
+      let applyCash = newInv.cashBalance;
+      let applyBank = newInv.bankBalance;
+      const newIsBank = ['BANK', 'ONLINE', 'CHEQUE'].includes((newMethod || '').toUpperCase());
+
+      if (newType === 'RECEIVED') {
+        if (newIsBank) applyBank += newAmount;
+        else applyCash += newAmount;
+      } else if (newType === 'SENT') {
+        if (newIsBank) applyBank = Math.max(0, applyBank - newAmount);
+        else applyCash = Math.max(0, applyCash - newAmount);
+      }
+
+      await tx.currencyInventory.update({
+        where: { currencyCode: newCurrency },
+        data: {
+          cashBalance: Number(applyCash.toFixed(2)),
+          bankBalance: Number(applyBank.toFixed(2)),
+        },
+      });
+
+      // 3. Update Record
+      return await tx.payment.update({
+        where: { id },
+        data: {
+          type: newType,
+          partyId: newPartyId,
+          amount: newAmount,
+          currencyCode: newCurrency,
+          paymentMethod: newMethod,
+          referenceNo: referenceNo !== undefined ? referenceNo : oldPayment.referenceNo,
+          notes: notes !== undefined ? notes : oldPayment.notes,
+        },
+        include: { party: true },
+      });
+    });
+
+    return NextResponse.json({ success: true, payment: updatedPayment });
+  } catch (error: any) {
+    console.error('Payments PUT Error:', error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+  }
+}

@@ -157,3 +157,176 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
 }
+
+export async function PUT(req: Request) {
+  try {
+    const body = await req.json();
+    const { id, type, currencyCode, amount, paymentMethod, sourceOrDestination, notes } = body;
+
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'Wallet Transaction ID is required' }, { status: 400 });
+    }
+
+    const oldTx = await prisma.walletTransaction.findUnique({ where: { id } });
+    if (!oldTx) {
+      return NextResponse.json({ success: false, error: 'Wallet Transaction not found' }, { status: 404 });
+    }
+
+    const newType = type || oldTx.type;
+    const newCurrency = currencyCode || oldTx.currencyCode;
+    const newAmount = amount !== undefined && amount !== null ? parseFloat(amount) : oldTx.amount;
+    const newMethod = paymentMethod || oldTx.paymentMethod;
+
+    if (isNaN(newAmount) || newAmount <= 0) {
+      return NextResponse.json({ success: false, error: 'Valid positive amount required' }, { status: 400 });
+    }
+
+    const updatedTx = await prisma.$transaction(async (prismaTx: any) => {
+      // 1. Revert Old Transaction Impact
+      const oldInv = await prismaTx.currencyInventory.findUnique({
+        where: { currencyCode: oldTx.currencyCode },
+      });
+
+      if (oldInv) {
+        let revCash = oldInv.cashBalance;
+        let revBank = oldInv.bankBalance;
+        const oldAmt = oldTx.amount;
+
+        if (oldTx.type === 'CAPITAL_DEPOSIT') {
+          if (oldTx.paymentMethod === 'BANK') revBank = Math.max(0, revBank - oldAmt);
+          else revCash = Math.max(0, revCash - oldAmt);
+        } else if (oldTx.type === 'CAPITAL_WITHDRAWAL') {
+          if (oldTx.paymentMethod === 'BANK') revBank += oldAmt;
+          else revCash += oldAmt;
+        } else if (oldTx.type === 'TRANSFER_CASH_TO_BANK') {
+          revCash += oldAmt;
+          revBank = Math.max(0, revBank - oldAmt);
+        } else if (oldTx.type === 'TRANSFER_BANK_TO_CASH') {
+          revBank += oldAmt;
+          revCash = Math.max(0, revCash - oldAmt);
+        }
+
+        await prismaTx.currencyInventory.update({
+          where: { currencyCode: oldTx.currencyCode },
+          data: {
+            cashBalance: Number(revCash.toFixed(2)),
+            bankBalance: Number(revBank.toFixed(2)),
+          },
+        });
+      }
+
+      // 2. Apply New Transaction Impact
+      let newInv = await prismaTx.currencyInventory.findUnique({
+        where: { currencyCode: newCurrency },
+      });
+      if (!newInv) {
+        newInv = await prismaTx.currencyInventory.create({
+          data: { currencyCode: newCurrency, cashBalance: 0, bankBalance: 0 },
+        });
+      }
+
+      let applyCash = newInv.cashBalance;
+      let applyBank = newInv.bankBalance;
+
+      if (newType === 'CAPITAL_DEPOSIT') {
+        if (newMethod === 'BANK') applyBank += newAmount;
+        else applyCash += newAmount;
+      } else if (newType === 'CAPITAL_WITHDRAWAL') {
+        if (newMethod === 'BANK') applyBank = Math.max(0, applyBank - newAmount);
+        else applyCash = Math.max(0, applyCash - newAmount);
+      } else if (newType === 'TRANSFER_CASH_TO_BANK') {
+        applyCash = Math.max(0, applyCash - newAmount);
+        applyBank += newAmount;
+      } else if (newType === 'TRANSFER_BANK_TO_CASH') {
+        applyBank = Math.max(0, applyBank - newAmount);
+        applyCash += newAmount;
+      } else if (newType === 'ADJUSTMENT') {
+        if (newMethod === 'BANK') applyBank = newAmount;
+        else applyCash = newAmount;
+      }
+
+      await prismaTx.currencyInventory.update({
+        where: { currencyCode: newCurrency },
+        data: {
+          cashBalance: Number(applyCash.toFixed(2)),
+          bankBalance: Number(applyBank.toFixed(2)),
+        },
+      });
+
+      // 3. Update Record
+      return await prismaTx.walletTransaction.update({
+        where: { id },
+        data: {
+          type: newType,
+          currencyCode: newCurrency,
+          amount: newAmount,
+          paymentMethod: newMethod,
+          sourceOrDestination: sourceOrDestination !== undefined ? sourceOrDestination : oldTx.sourceOrDestination,
+          notes: notes !== undefined ? notes : oldTx.notes,
+        },
+      });
+    });
+
+    return NextResponse.json({ success: true, transaction: updatedTx });
+  } catch (error: any) {
+    console.error('Wallet PUT Error:', error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'Wallet Transaction ID is required' }, { status: 400 });
+    }
+
+    const tx = await prisma.walletTransaction.findUnique({ where: { id } });
+    if (!tx) {
+      return NextResponse.json({ success: false, error: 'Wallet Transaction not found' }, { status: 404 });
+    }
+
+    await prisma.$transaction(async (prismaTx: any) => {
+      const inventory = await prismaTx.currencyInventory.findUnique({
+        where: { currencyCode: tx.currencyCode },
+      });
+
+      if (inventory) {
+        let newCash = inventory.cashBalance;
+        let newBank = inventory.bankBalance;
+        const amt = tx.amount;
+
+        if (tx.type === 'CAPITAL_DEPOSIT') {
+          if (tx.paymentMethod === 'BANK') newBank = Math.max(0, newBank - amt);
+          else newCash = Math.max(0, newCash - amt);
+        } else if (tx.type === 'CAPITAL_WITHDRAWAL') {
+          if (tx.paymentMethod === 'BANK') newBank += amt;
+          else newCash += amt;
+        } else if (tx.type === 'TRANSFER_CASH_TO_BANK') {
+          newCash += amt;
+          newBank = Math.max(0, newBank - amt);
+        } else if (tx.type === 'TRANSFER_BANK_TO_CASH') {
+          newBank += amt;
+          newCash = Math.max(0, newCash - amt);
+        }
+
+        await prismaTx.currencyInventory.update({
+          where: { currencyCode: tx.currencyCode },
+          data: {
+            cashBalance: Number(newCash.toFixed(2)),
+            bankBalance: Number(newBank.toFixed(2)),
+          },
+        });
+      }
+
+      await prismaTx.walletTransaction.delete({ where: { id } });
+    });
+
+    return NextResponse.json({ success: true, message: 'Wallet transaction deleted successfully' });
+  } catch (error: any) {
+    console.error('Wallet DELETE Error:', error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}

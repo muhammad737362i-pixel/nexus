@@ -13,6 +13,7 @@ import {
   Edit2,
   Percent,
   Trash2,
+  MoreVertical,
 } from 'lucide-react';
 
 export default function RatesPage() {
@@ -378,9 +379,20 @@ export default function RatesPage() {
                                   Fixed Rate Active
                                 </span>
                                 <button
+                                  onClick={() => {
+                                    setTargetCurrency(c.code);
+                                    setFixedRate(currentFixedRate ? currentFixedRate.toString() : '');
+                                    setMarginPct(assigned.marginPercent ? assigned.marginPercent.toString() : '0');
+                                  }}
+                                  title="Edit custom rate"
+                                  className="p-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-300 rounded-lg border border-slate-700 transition cursor-pointer"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
                                   onClick={() => handleDeleteCustomRate(selectedPartyId, c.code)}
                                   title="Delete custom rate override"
-                                  className="p-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg border border-rose-500/30 transition cursor-pointer"
+                                  className="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg border border-rose-500/30 transition cursor-pointer"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
@@ -487,9 +499,10 @@ export default function RatesPage() {
                                 setEditBuyRate(c.defaultBuyRate.toString());
                                 setEditSellRate(c.defaultSellRate.toString());
                               }}
-                              className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-indigo-300 rounded-lg text-[11px] font-semibold flex items-center gap-1 ml-auto"
+                              title="Edit Base Rate"
+                              className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 transition cursor-pointer ml-auto block"
                             >
-                              <Edit2 className="w-3 h-3" /> Edit Base Rate
+                              <MoreVertical className="w-4 h-4" />
                             </button>
                           )
                         )}
