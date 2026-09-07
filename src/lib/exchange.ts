@@ -71,10 +71,33 @@ export async function getEffectiveRateForParty(
  * Generates sequential unique receipt number
  */
 export async function generateReceiptNo(): Promise<string> {
-  const count = await prisma.transaction.count();
-  const nextNum = 1001 + count;
   const year = new Date().getFullYear();
-  return `NX-${year}-${nextNum}`;
+  const prefix = `NX-${year}-`;
+
+  const lastTx = await prisma.transaction.findFirst({
+    where: { receiptNo: { startsWith: prefix } },
+    orderBy: { createdAt: 'desc' },
+    select: { receiptNo: true },
+  });
+
+  let nextNum = 1001;
+  if (lastTx?.receiptNo) {
+    const parts = lastTx.receiptNo.split('-');
+    const lastNum = parseInt(parts[parts.length - 1], 10);
+    if (!isNaN(lastNum)) {
+      nextNum = lastNum + 1;
+    }
+  }
+
+  let candidate = `${prefix}${nextNum}`;
+  let exists = await prisma.transaction.findUnique({ where: { receiptNo: candidate } });
+  while (exists) {
+    nextNum++;
+    candidate = `${prefix}${nextNum}`;
+    exists = await prisma.transaction.findUnique({ where: { receiptNo: candidate } });
+  }
+
+  return candidate;
 }
 
 /**

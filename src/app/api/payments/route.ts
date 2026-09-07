@@ -2,10 +2,33 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 
 async function generatePaymentReceiptNo(): Promise<string> {
-  const count = await prisma.payment.count();
-  const nextNum = 1001 + count;
   const year = new Date().getFullYear();
-  return `PAY-${year}-${nextNum}`;
+  const prefix = `PAY-${year}-`;
+
+  const lastPay = await prisma.payment.findFirst({
+    where: { receiptNo: { startsWith: prefix } },
+    orderBy: { createdAt: 'desc' },
+    select: { receiptNo: true },
+  });
+
+  let nextNum = 1001;
+  if (lastPay?.receiptNo) {
+    const parts = lastPay.receiptNo.split('-');
+    const lastNum = parseInt(parts[parts.length - 1], 10);
+    if (!isNaN(lastNum)) {
+      nextNum = lastNum + 1;
+    }
+  }
+
+  let candidate = `${prefix}${nextNum}`;
+  let exists = await prisma.payment.findUnique({ where: { receiptNo: candidate } });
+  while (exists) {
+    nextNum++;
+    candidate = `${prefix}${nextNum}`;
+    exists = await prisma.payment.findUnique({ where: { receiptNo: candidate } });
+  }
+
+  return candidate;
 }
 
 export async function GET() {
