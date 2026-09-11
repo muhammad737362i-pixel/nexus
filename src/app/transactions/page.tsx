@@ -236,6 +236,14 @@ export default function TransactionsPage() {
     }
   };
 
+const toLocalISOString = (dateStr?: string) => {
+  if (!dateStr) return new Date().toISOString().slice(0, 16);
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return new Date().toISOString().slice(0, 16);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
   const handleSaveTransactionEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingTx) return;
@@ -254,6 +262,7 @@ export default function TransactionsPage() {
           fee: editingTx.fee,
           paymentMethod: editingTx.paymentMethod,
           notes: editingTx.notes,
+          createdAt: editingTx.createdAt,
         }),
       });
 
@@ -629,7 +638,7 @@ export default function TransactionsPage() {
                           <FileText className="w-3 h-3" /> Receipt
                         </button>
                         <button
-                          onClick={() => setEditingTx({ ...tx })}
+                          onClick={() => setEditingTx({ ...tx, createdAt: toLocalISOString(tx.createdAt) })}
                           title="Edit or Delete transaction"
                           className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 transition cursor-pointer"
                         >
@@ -738,6 +747,18 @@ export default function TransactionsPage() {
 
             <form onSubmit={handleSaveTransactionEdit} className="space-y-4 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Transaction Date & Time */}
+                <div className="space-y-1.5 sm:col-span-2">
+                  <label className="text-slate-400 font-semibold">Transaction Date & Time</label>
+                  <input
+                    type="datetime-local"
+                    value={editingTx.createdAt || ''}
+                    onChange={(e) => setEditingTx({ ...editingTx, createdAt: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-indigo-500"
+                    required
+                  />
+                </div>
+
                 {/* Person / Party */}
                 <div className="space-y-1.5 sm:col-span-2">
                   <label className="text-slate-400 font-semibold">Party / Person</label>

@@ -119,7 +119,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { type, partyId, fromCurrency, toCurrency, amountGiven, appliedRate, fee, paymentMethod, notes } = body;
+    const { type, partyId, fromCurrency, toCurrency, amountGiven, appliedRate, fee, paymentMethod, notes, createdAt } = body;
 
     if (!type || !partyId || !fromCurrency || !toCurrency || !amountGiven || !appliedRate) {
       return NextResponse.json(
@@ -139,6 +139,7 @@ export async function POST(req: Request) {
         fee: fee ? parseFloat(fee) : 0,
         paymentMethod: paymentMethod || 'CASH',
         notes,
+        createdAt,
       });
     } else if (type === 'SELL') {
       transaction = await processSellTransaction({
@@ -150,6 +151,7 @@ export async function POST(req: Request) {
         fee: fee ? parseFloat(fee) : 0,
         paymentMethod: paymentMethod || 'CASH',
         notes,
+        createdAt,
       });
     } else {
       return NextResponse.json({ success: false, error: 'Invalid transaction type' }, { status: 400 });
@@ -231,7 +233,7 @@ export async function DELETE(req: Request) {
 export async function PUT(req: Request) {
   try {
     const body = await req.json();
-    const { id, partyId, type, amountGiven, appliedRate, fee, paymentMethod, notes } = body;
+    const { id, partyId, type, amountGiven, appliedRate, fee, paymentMethod, notes, createdAt } = body;
 
     if (!id) {
       return NextResponse.json({ success: false, error: 'Transaction ID is required' }, { status: 400 });
@@ -275,6 +277,7 @@ export async function PUT(req: Request) {
         totalProfit,
         paymentMethod: paymentMethod || tx.paymentMethod,
         notes: notes !== undefined ? notes : tx.notes,
+        ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
       },
       include: {
         party: true,

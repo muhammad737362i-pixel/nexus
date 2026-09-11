@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowUpRight, Sparkles, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import { ArrowUpRight, Sparkles, CheckCircle2, AlertCircle, RefreshCw, Calendar } from 'lucide-react';
+import { getWorkingDateTimeISO } from '@/lib/dateUtils';
 
 export default function SellingPage() {
   const router = useRouter();
@@ -19,6 +20,11 @@ export default function SellingPage() {
   const [fee, setFee] = useState<string>('0');
   const [paymentMethod, setPaymentMethod] = useState<string>('CASH');
   const [notes, setNotes] = useState('');
+  const [customDateTime, setCustomDateTime] = useState<string>('');
+
+  useEffect(() => {
+    setCustomDateTime(getWorkingDateTimeISO());
+  }, []);
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -112,6 +118,7 @@ export default function SellingPage() {
           fee: numFee,
           paymentMethod,
           notes,
+          createdAt: customDateTime || undefined,
         }),
       });
 
@@ -344,8 +351,8 @@ export default function SellingPage() {
           </div>
         </div>
 
-        {/* Optional Fee & Notes */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Optional Fee, Notes & Transaction Date */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="space-y-2">
             <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
               Processing Fee / Service Charge (₹)
@@ -369,6 +376,18 @@ export default function SellingPage() {
               onChange={(e) => setNotes(e.target.value)}
               placeholder="e.g. Wire confirmation number..."
               className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-indigo-500"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 text-indigo-400" /> Transaction Date & Time
+            </label>
+            <input
+              type="datetime-local"
+              value={customDateTime}
+              onChange={(e) => setCustomDateTime(e.target.value)}
+              className="w-full bg-slate-900 border border-indigo-500/40 rounded-xl px-4 py-3 text-indigo-200 font-bold text-sm focus:outline-none focus:border-indigo-400 cursor-pointer"
             />
           </div>
         </div>

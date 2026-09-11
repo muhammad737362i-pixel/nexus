@@ -21,6 +21,16 @@ import {
   Edit2,
 } from 'lucide-react';
 
+import { getWorkingDateTimeISO } from '@/lib/dateUtils';
+
+const toLocalISOString = (dateStr?: string) => {
+  if (!dateStr) return getWorkingDateTimeISO();
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return getWorkingDateTimeISO();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
 export default function PaymentsPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -48,6 +58,7 @@ export default function PaymentsPage() {
           paymentMethod: editingPayment.paymentMethod,
           referenceNo: editingPayment.referenceNo,
           notes: editingPayment.notes,
+          createdAt: editingPayment.createdAt,
         }),
       });
       const json = await res.json();
@@ -77,6 +88,7 @@ export default function PaymentsPage() {
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [referenceNo, setReferenceNo] = useState('');
   const [notes, setNotes] = useState('');
+  const [customDateTime, setCustomDateTime] = useState('');
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -133,6 +145,7 @@ export default function PaymentsPage() {
     setAmount('');
     setReferenceNo('');
     setNotes('');
+    setCustomDateTime(getWorkingDateTimeISO());
     setError(null);
     setSuccessMsg(null);
     setModalOpen(true);
@@ -167,6 +180,7 @@ export default function PaymentsPage() {
           paymentMethod,
           referenceNo,
           notes,
+          createdAt: customDateTime,
         }),
       });
 
@@ -433,7 +447,7 @@ export default function PaymentsPage() {
                             <Receipt className="w-3 h-3" /> Voucher
                           </button>
                           <button
-                            onClick={() => setEditingPayment({ ...p })}
+                            onClick={() => setEditingPayment({ ...p, createdAt: toLocalISOString(p.createdAt) })}
                             title="Edit or Delete payment entry"
                             className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 transition cursor-pointer"
                           >
@@ -481,6 +495,20 @@ export default function PaymentsPage() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+              {/* Payment Date & Time */}
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
+                  Payment Date & Time (Active Working Date)
+                </label>
+                <input
+                  type="datetime-local"
+                  value={customDateTime}
+                  onChange={(e) => setCustomDateTime(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white font-mono focus:outline-none focus:border-indigo-500"
+                  required
+                />
+              </div>
+
               {/* Direction Toggle */}
               <div>
                 <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
@@ -728,6 +756,20 @@ export default function PaymentsPage() {
             </div>
 
             <form onSubmit={handleEditPaymentSubmit} className="space-y-4 text-xs">
+              {/* Payment Date & Time */}
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
+                  Payment Date & Time
+                </label>
+                <input
+                  type="datetime-local"
+                  value={editingPayment.createdAt || ''}
+                  onChange={(e) => setEditingPayment({ ...editingPayment, createdAt: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white font-mono focus:outline-none focus:border-indigo-500"
+                  required
+                />
+              </div>
+
               {/* Payment Direction */}
               <div>
                 <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">

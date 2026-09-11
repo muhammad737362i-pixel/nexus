@@ -98,6 +98,7 @@ export async function POST(req: Request) {
       paymentMethod = 'CASH',
       referenceNo,
       notes,
+      createdAt,
     } = body;
 
     if (!type || !partyId || !amount || !currencyCode || amount <= 0) {
@@ -114,6 +115,7 @@ export async function POST(req: Request) {
 
     const receiptNo = await generatePaymentReceiptNo();
     const numericAmount = Number(amount);
+    const payDate = createdAt ? new Date(createdAt) : undefined;
 
     const result = await prisma.$transaction(async (tx: any) => {
       // 1. Create Payment Record
@@ -128,6 +130,7 @@ export async function POST(req: Request) {
           referenceNo: referenceNo || null,
           status: 'COMPLETED',
           notes: notes || null,
+          ...(payDate ? { createdAt: payDate } : {}),
         },
       });
 
@@ -257,7 +260,7 @@ export async function DELETE(req: Request) {
 export async function PUT(req: Request) {
   try {
     const body = await req.json();
-    const { id, type, partyId, amount, currencyCode, paymentMethod, referenceNo, notes } = body;
+    const { id, type, partyId, amount, currencyCode, paymentMethod, referenceNo, notes, createdAt } = body;
 
     if (!id) {
       return NextResponse.json({ success: false, error: 'Payment ID is required' }, { status: 400 });
@@ -343,6 +346,7 @@ export async function PUT(req: Request) {
           paymentMethod: newMethod,
           referenceNo: referenceNo !== undefined ? referenceNo : oldPayment.referenceNo,
           notes: notes !== undefined ? notes : oldPayment.notes,
+          ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
         },
         include: { party: true },
       });

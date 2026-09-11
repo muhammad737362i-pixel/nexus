@@ -19,10 +19,32 @@ import {
   RotateCcw,
   Filter,
 } from 'lucide-react';
+import { getWorkingDate, setWorkingDate } from '@/lib/dateUtils';
 
 export default function Dashboard() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  // Global Active Working Business Date State
+  const [workingDate, setWorkingDateState] = useState<string>('');
+
+  useEffect(() => {
+    setWorkingDateState(getWorkingDate());
+  }, []);
+
+  const handleWorkingDateChange = (newDate: string) => {
+    setWorkingDateState(newDate);
+    setWorkingDate(newDate);
+  };
+
+  const resetWorkingDateToToday = () => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    const todayStr = `${y}-${m}-${d}`;
+    handleWorkingDateChange(todayStr);
+  };
 
   // Date & Time Search Filter State
   const [datePreset, setDatePreset] = useState<string>('TODAY'); // TODAY, YESTERDAY, WEEK, MONTH, ALL, CUSTOM
@@ -36,6 +58,15 @@ export default function Dashboard() {
     }
     const now = new Date();
     if (datePreset === 'TODAY') {
+      if (workingDate) {
+        const parts = workingDate.split('-');
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10) - 1;
+        const d = parseInt(parts[2], 10);
+        const start = new Date(y, m, d, 0, 0, 0, 0).toISOString();
+        const end = new Date(y, m, d, 23, 59, 59, 999).toISOString();
+        return { start, end };
+      }
       const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
       const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
       return { start, end };
@@ -83,13 +114,16 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchDashboard();
-  }, [datePreset, startDate, endDate]);
+  }, [datePreset, startDate, endDate, workingDate]);
 
   const resetDateFilter = () => {
     setDatePreset('TODAY');
     setStartDate('');
     setEndDate('');
   };
+
+  const nowObj = new Date();
+  const todayStr = `${nowObj.getFullYear()}-${String(nowObj.getMonth() + 1).padStart(2, '0')}-${String(nowObj.getDate()).padStart(2, '0')}`;
 
   if (loading) {
     return (
@@ -106,7 +140,7 @@ export default function Dashboard() {
   const getMetricLabelPrefix = () => {
     switch (datePreset) {
       case 'TODAY':
-        return 'Today';
+        return workingDate === todayStr ? 'Today' : `Working Date (${workingDate})`;
       case 'YESTERDAY':
         return 'Yesterday';
       case 'WEEK':
@@ -157,6 +191,45 @@ export default function Dashboard() {
           >
             <ArrowUpRight className="w-4 h-4" /> Sell Trade
           </Link>
+        </div>
+      </div>
+
+      {/* GLOBAL ACTIVE WORKING BUSINESS DATE CONTROLLER */}
+      <div className="glass-card rounded-2xl p-4 border border-indigo-500/40 bg-gradient-to-r from-indigo-950/60 via-slate-900 to-slate-900 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+            <Calendar className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-bold text-white uppercase tracking-wider">Active Working Business Date</h2>
+              {workingDate && workingDate !== todayStr && (
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  LATE-NIGHT / SHIFT MODE ACTIVE
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-400">
+              Controls default date for new trades, payments, capital entries & portal statistics.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <input
+            type="date"
+            value={workingDate || todayStr}
+            onChange={(e) => handleWorkingDateChange(e.target.value)}
+            className="bg-slate-950 border border-indigo-500/50 rounded-xl px-3.5 py-2 text-white font-bold text-xs focus:outline-none focus:border-indigo-400 cursor-pointer"
+          />
+          {workingDate && workingDate !== todayStr && (
+            <button
+              onClick={resetWorkingDateToToday}
+              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-md cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" /> Reset to Today
+            </button>
+          )}
         </div>
       </div>
 

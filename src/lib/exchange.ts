@@ -128,8 +128,9 @@ export async function processBuyTransaction(params: {
   fee?: number;
   paymentMethod?: string;
   notes?: string;
+  createdAt?: Date | string;
 }) {
-  const { partyId, fromCurrency, toCurrency, amountGiven, appliedRate, fee = 0, paymentMethod = 'CASH', notes } = params;
+  const { partyId, fromCurrency, toCurrency, amountGiven, appliedRate, fee = 0, paymentMethod = 'CASH', notes, createdAt } = params;
 
   const party = await prisma.party.findUnique({ where: { id: partyId } });
   if (!party) throw new Error('Party not found');
@@ -141,6 +142,7 @@ export async function processBuyTransaction(params: {
   const totalProfit = calculateTradeProfit('BUY', amountGiven, appliedRate, fee, marketBuyRate, inrCurrency?.defaultSellRate || appliedRate);
 
   const receiptNo = await generateReceiptNo();
+  const txDate = createdAt ? new Date(createdAt) : undefined;
 
   return await prisma.$transaction(async (tx: any) => {
     const transaction = await tx.transaction.create({
@@ -158,6 +160,7 @@ export async function processBuyTransaction(params: {
         paymentMethod,
         status: 'COMPLETED',
         notes,
+        ...(txDate ? { createdAt: txDate } : {}),
       },
     });
 
@@ -170,6 +173,7 @@ export async function processBuyTransaction(params: {
         amount: amountGiven,
         balanceAfter: amountGiven,
         notes: `Payout for Buy order (${receiptNo})`,
+        ...(txDate ? { createdAt: txDate } : {}),
       },
     });
 
@@ -214,8 +218,9 @@ export async function processSellTransaction(params: {
   fee?: number;
   paymentMethod?: string;
   notes?: string;
+  createdAt?: Date | string;
 }) {
-  const { partyId, fromCurrency, toCurrency, amountGiven, appliedRate, fee = 0, paymentMethod = 'CASH', notes } = params;
+  const { partyId, fromCurrency, toCurrency, amountGiven, appliedRate, fee = 0, paymentMethod = 'CASH', notes, createdAt } = params;
 
   const party = await prisma.party.findUnique({ where: { id: partyId } });
   if (!party) throw new Error('Party not found');
@@ -227,6 +232,7 @@ export async function processSellTransaction(params: {
   const totalProfit = calculateTradeProfit('SELL', amountGiven, appliedRate, fee, inrCurrency?.defaultBuyRate || appliedRate, marketSellRate);
 
   const receiptNo = await generateReceiptNo();
+  const txDate = createdAt ? new Date(createdAt) : undefined;
 
   return await prisma.$transaction(async (tx: any) => {
     const transaction = await tx.transaction.create({
@@ -244,6 +250,7 @@ export async function processSellTransaction(params: {
         paymentMethod,
         status: 'COMPLETED',
         notes,
+        ...(txDate ? { createdAt: txDate } : {}),
       },
     });
 
@@ -256,6 +263,7 @@ export async function processSellTransaction(params: {
         amount: amountGiven,
         balanceAfter: amountGiven,
         notes: `Sell trade payment received (${receiptNo})`,
+        ...(txDate ? { createdAt: txDate } : {}),
       },
     });
 

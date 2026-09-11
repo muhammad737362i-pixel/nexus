@@ -59,7 +59,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { type, currencyCode, amount, paymentMethod = 'CASH', sourceOrDestination, notes } = body;
+    const { type, currencyCode, amount, paymentMethod = 'CASH', sourceOrDestination, notes, createdAt } = body;
 
     if (!type || !currencyCode || !amount || amount <= 0) {
       return NextResponse.json(
@@ -142,6 +142,7 @@ export async function POST(req: Request) {
           paymentMethod,
           sourceOrDestination: sourceOrDestination || (type.includes('DEPOSIT') ? 'Owner Deposit' : 'Capital Adjustment'),
           notes,
+          ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
         },
       });
 
@@ -161,7 +162,7 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
   try {
     const body = await req.json();
-    const { id, type, currencyCode, amount, paymentMethod, sourceOrDestination, notes } = body;
+    const { id, type, currencyCode, amount, paymentMethod, sourceOrDestination, notes, createdAt } = body;
 
     if (!id) {
       return NextResponse.json({ success: false, error: 'Wallet Transaction ID is required' }, { status: 400 });
@@ -263,6 +264,7 @@ export async function PUT(req: Request) {
           paymentMethod: newMethod,
           sourceOrDestination: sourceOrDestination !== undefined ? sourceOrDestination : oldTx.sourceOrDestination,
           notes: notes !== undefined ? notes : oldTx.notes,
+          ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
         },
       });
     });

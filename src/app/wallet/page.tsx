@@ -20,6 +20,16 @@ import {
   Edit2,
 } from 'lucide-react';
 
+import { getWorkingDateTimeISO } from '@/lib/dateUtils';
+
+const toLocalISOString = (dateStr?: string) => {
+  if (!dateStr) return getWorkingDateTimeISO();
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return getWorkingDateTimeISO();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
 export default function WalletPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -39,6 +49,7 @@ export default function WalletPage() {
   const [paymentMethod, setPaymentMethod] = useState<string>('CASH');
   const [sourceOrDestination, setSourceOrDestination] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
+  const [customDateTime, setCustomDateTime] = useState<string>('');
 
   const handleDeleteWalletTx = async (id: string) => {
     if (!confirm('Are you sure you want to delete this capital transaction? This will revert inventory balance.')) return;
@@ -72,6 +83,7 @@ export default function WalletPage() {
           paymentMethod: editingTx.paymentMethod,
           sourceOrDestination: editingTx.sourceOrDestination,
           notes: editingTx.notes,
+          createdAt: editingTx.createdAt,
         }),
       });
 
@@ -116,6 +128,7 @@ export default function WalletPage() {
     setAmount('');
     setSourceOrDestination('');
     setNotes('');
+    setCustomDateTime(getWorkingDateTimeISO());
     setError(null);
     setSuccessMsg(null);
     setModalOpen(true);
@@ -144,6 +157,7 @@ export default function WalletPage() {
           paymentMethod,
           sourceOrDestination,
           notes,
+          createdAt: customDateTime,
         }),
       });
 
@@ -435,7 +449,7 @@ export default function WalletPage() {
                       <td className="py-3 px-4 text-slate-400 italic">{tx.notes || '—'}</td>
                       <td className="py-3 px-4 text-center">
                         <button
-                          onClick={() => setEditingTx({ ...tx })}
+                          onClick={() => setEditingTx({ ...tx, createdAt: toLocalISOString(tx.createdAt) })}
                           title="Edit or Delete transaction"
                           className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 transition cursor-pointer"
                         >
@@ -482,6 +496,20 @@ export default function WalletPage() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+              {/* Date & Time Field */}
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
+                  Transaction Date & Time (Active Working Date)
+                </label>
+                <input
+                  type="datetime-local"
+                  value={customDateTime}
+                  onChange={(e) => setCustomDateTime(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white font-mono focus:outline-none focus:border-indigo-500"
+                  required
+                />
+              </div>
+
               {/* Action Type Selector */}
               <div>
                 <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
@@ -618,6 +646,20 @@ export default function WalletPage() {
             </div>
 
             <form onSubmit={handleEditWalletSubmit} className="space-y-4 text-xs">
+              {/* Date & Time Field */}
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
+                  Transaction Date & Time
+                </label>
+                <input
+                  type="datetime-local"
+                  value={editingTx.createdAt || ''}
+                  onChange={(e) => setEditingTx({ ...editingTx, createdAt: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white font-mono focus:outline-none focus:border-indigo-500"
+                  required
+                />
+              </div>
+
               {/* Category */}
               <div>
                 <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
