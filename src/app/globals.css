@@ -133,3 +133,32 @@ body.light-mode .bg-slate-900\/90 {
   background-color: #f8fafc !important;
 }
 
+/* Date & Datetime Picker Icon Visibility for Dark Mode */
+input[type="date"],
+input[type="datetime-local"] {
+  color-scheme: dark;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  cursor: pointer;
+  opacity: 0.85;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+body.light-mode input[type="date"],
+body.light-mode input[type="datetime-local"] {
+  color-scheme: light;
+}
+
+body.light-mode input[type="date"]::-webkit-calendar-picker-indicator,
+body.light-mode input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: none;
+}
+
+

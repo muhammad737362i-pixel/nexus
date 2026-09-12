@@ -220,7 +220,7 @@ export default function Dashboard() {
             type="date"
             value={workingDate || todayStr}
             onChange={(e) => handleWorkingDateChange(e.target.value)}
-            className="bg-slate-950 border border-indigo-500/50 rounded-xl px-3.5 py-2 text-white font-bold text-xs focus:outline-none focus:border-indigo-400 cursor-pointer"
+            className="bg-slate-950 border border-indigo-500/50 rounded-xl px-3.5 py-2 text-white font-bold text-xs focus:outline-none focus:border-indigo-400 cursor-pointer [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:invert"
           />
           {workingDate && workingDate !== todayStr && (
             <button
