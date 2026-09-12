@@ -133,29 +133,26 @@ body.light-mode .bg-slate-900\/90 {
   background-color: #f8fafc !important;
 }
 
-/* Date & Datetime Picker Icon Visibility for Dark Mode */
+/* White background for Date & Datetime Inputs for Maximum Calendar Icon Visibility */
 input[type="date"],
 input[type="datetime-local"] {
-  color-scheme: dark !important;
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  color-scheme: light !important;
+  font-weight: 700 !important;
 }
 
 input[type="date"]::-webkit-calendar-picker-indicator,
 input[type="datetime-local"]::-webkit-calendar-picker-indicator {
-  filter: invert(1) brightness(200%) !important;
-  -webkit-filter: invert(1) brightness(200%) !important;
-  cursor: pointer !important;
-  opacity: 1 !important;
-}
-
-body.light-mode input[type="date"],
-body.light-mode input[type="datetime-local"] {
-  color-scheme: light !important;
-}
-
-body.light-mode input[type="date"]::-webkit-calendar-picker-indicator,
-body.light-mode input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   filter: none !important;
   -webkit-filter: none !important;
+  cursor: pointer !important;
+  opacity: 0.85 !important;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1 !important;
 }
 
 
