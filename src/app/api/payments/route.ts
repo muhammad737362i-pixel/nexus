@@ -36,21 +36,28 @@ export async function GET() {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
-    const payments = await prisma.payment.findMany({
-      take: 100,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        party: true,
-      },
-    });
-
-    const parties = await prisma.party.findMany({
-      orderBy: { name: 'asc' },
-    });
-
-    const currencies = await prisma.currency.findMany({
-      orderBy: { code: 'asc' },
-    });
+    const [payments, parties, currencies, transactions] = await Promise.all([
+      prisma.payment.findMany({
+        take: 500,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          party: true,
+        },
+      }),
+      prisma.party.findMany({
+        orderBy: { name: 'asc' },
+      }),
+      prisma.currency.findMany({
+        orderBy: { code: 'asc' },
+      }),
+      prisma.transaction.findMany({
+        take: 1000,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          party: true,
+        },
+      }),
+    ]);
 
     let todayReceived = 0;
     let todaySent = 0;
@@ -68,6 +75,63 @@ export async function GET() {
       }
     });
 
+    // Compute Party Financial Summaries (Buying Data, Payments Paid, Pending Balances)
+    const partyStats: Record<string, any> = {};
+    parties.forEach((p: any) => {
+      partyStats[p.id] = {
+        totalBuyVolumeUSDT: 0,
+        totalSellVolumeUSDT: 0,
+        totalBuyBilledINR: 0,
+        totalSellBilledINR: 0,
+        totalPaidSent: 0,
+        totalPaidReceived: 0,
+        pendingBalance: 0,
+        tradeCount: 0,
+        paymentCount: 0,
+      };
+    });
+
+    transactions.forEach((tx: any) => {
+      if (!partyStats[tx.partyId]) return;
+      partyStats[tx.partyId].tradeCount += 1;
+      if (tx.type === 'BUY') {
+        if (tx.toCurrency === 'USDT' || tx.toCurrency === 'USD') {
+          partyStats[tx.partyId].totalBuyVolumeUSDT += tx.amountReceived;
+        }
+        partyStats[tx.partyId].totalBuyBilledINR += tx.amountGiven;
+      } else if (tx.type === 'SELL') {
+        if (tx.fromCurrency === 'USDT' || tx.fromCurrency === 'USD') {
+          partyStats[tx.partyId].totalSellVolumeUSDT += tx.amountGiven;
+        }
+        partyStats[tx.partyId].totalSellBilledINR += tx.amountReceived;
+      }
+    });
+
+    payments.forEach((p: any) => {
+      if (!partyStats[p.partyId]) return;
+      partyStats[p.partyId].paymentCount += 1;
+      if (p.type === 'SENT') {
+        partyStats[p.partyId].totalPaidSent += p.amount;
+      } else if (p.type === 'RECEIVED') {
+        partyStats[p.partyId].totalPaidReceived += p.amount;
+      }
+    });
+
+    let totalPendingBankerOwed = 0;
+    let totalPendingCustomerReceivable = 0;
+
+    parties.forEach((p: any) => {
+      const stats = partyStats[p.id];
+      if (!stats) return;
+      if (p.type === 'BANKER') {
+        stats.pendingBalance = Number((stats.totalBuyBilledINR - stats.totalPaidSent).toFixed(2));
+        if (stats.pendingBalance > 0) totalPendingBankerOwed += stats.pendingBalance;
+      } else {
+        stats.pendingBalance = Number((stats.totalSellBilledINR - stats.totalPaidReceived).toFixed(2));
+        if (stats.pendingBalance > 0) totalPendingCustomerReceivable += stats.pendingBalance;
+      }
+    });
+
     return NextResponse.json({
       success: true,
       summary: {
@@ -76,10 +140,14 @@ export async function GET() {
         netToday: todayReceived - todaySent,
         totalReceived,
         totalSent,
+        totalPendingBankerOwed,
+        totalPendingCustomerReceivable,
       },
       payments,
       parties,
       currencies,
+      transactions,
+      partyStats,
     });
   } catch (error: any) {
     console.error('Payments GET Error:', error);

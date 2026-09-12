@@ -19,6 +19,14 @@ import {
   Trash2,
   MoreVertical,
   Edit2,
+  RotateCcw,
+  Clock,
+  TrendingUp,
+  X,
+  FileText,
+  DollarSign,
+  ChevronRight,
+  ShieldAlert,
 } from 'lucide-react';
 
 import { getWorkingDateTimeISO } from '@/lib/dateUtils';
@@ -41,46 +49,18 @@ export default function PaymentsPage() {
   const [editingPayment, setEditingPayment] = useState<any | null>(null);
   const [editSaving, setEditSaving] = useState(false);
 
-  const handleEditPaymentSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingPayment) return;
-    setEditSaving(true);
-    try {
-      const res = await fetch('/api/payments', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: editingPayment.id,
-          type: editingPayment.type,
-          partyId: editingPayment.partyId,
-          amount: parseFloat(editingPayment.amount),
-          currencyCode: editingPayment.currencyCode,
-          paymentMethod: editingPayment.paymentMethod,
-          referenceNo: editingPayment.referenceNo,
-          notes: editingPayment.notes,
-          createdAt: editingPayment.createdAt,
-        }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        setEditingPayment(null);
-        await fetchPayments();
-      } else {
-        alert(json.error || 'Failed to update payment');
-      }
-    } catch (err: any) {
-      alert(err.message || 'Error updating payment');
-    } finally {
-      setEditSaving(false);
-    }
-  };
-
-  // Filters & Search
+  // Advanced Filters State
   const [searchTerm, setSearchTerm] = useState('');
-  const [directionFilter, setDirectionFilter] = useState('ALL');
-  const [methodFilter, setMethodFilter] = useState('ALL');
+  const [directionFilter, setDirectionFilter] = useState('ALL'); // ALL, RECEIVED, SENT
+  const [methodFilter, setMethodFilter] = useState('ALL'); // ALL, CASH, BANK, ONLINE, CHEQUE
+  const [partyCategoryFilter, setPartyCategoryFilter] = useState('ALL'); // ALL, BANKER, CUSTOMER
+  const [selectedPartyFilter, setSelectedPartyFilter] = useState('ALL'); // ALL or partyId
+  const [settlementFilter, setSettlementFilter] = useState('ALL'); // ALL, PENDING, SETTLED
+  const [datePreset, setDatePreset] = useState('ALL'); // ALL, TODAY, YESTERDAY, WEEK, MONTH, CUSTOM
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
-  // Form State
+  // Form State for Record Payment Modal
   const [paymentType, setPaymentType] = useState<'RECEIVED' | 'SENT'>('RECEIVED');
   const [partyId, setPartyId] = useState('');
   const [currencyCode, setCurrencyCode] = useState('USD');
@@ -140,8 +120,45 @@ export default function PaymentsPage() {
     }
   };
 
-  const openNewPaymentModal = (direction: 'RECEIVED' | 'SENT' = 'RECEIVED') => {
+  const handleEditPaymentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPayment) return;
+    setEditSaving(true);
+    try {
+      const res = await fetch('/api/payments', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingPayment.id,
+          type: editingPayment.type,
+          partyId: editingPayment.partyId,
+          amount: parseFloat(editingPayment.amount),
+          currencyCode: editingPayment.currencyCode,
+          paymentMethod: editingPayment.paymentMethod,
+          referenceNo: editingPayment.referenceNo,
+          notes: editingPayment.notes,
+          createdAt: editingPayment.createdAt,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setEditingPayment(null);
+        await fetchPayments();
+      } else {
+        alert(json.error || 'Failed to update payment');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error updating payment');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const openNewPaymentModal = (direction: 'RECEIVED' | 'SENT' = 'RECEIVED', preselectedPartyId?: string) => {
     handleDirectionChange(direction);
+    if (preselectedPartyId) {
+      setPartyId(preselectedPartyId);
+    }
     setAmount('');
     setReferenceNo('');
     setNotes('');
@@ -202,6 +219,29 @@ export default function PaymentsPage() {
     }
   };
 
+  const resetAllFilters = () => {
+    setSearchTerm('');
+    setDirectionFilter('ALL');
+    setMethodFilter('ALL');
+    setPartyCategoryFilter('ALL');
+    setSelectedPartyFilter('ALL');
+    setSettlementFilter('ALL');
+    setDatePreset('ALL');
+    setStartDate('');
+    setEndDate('');
+  };
+
+  const hasActiveFilters =
+    searchTerm !== '' ||
+    directionFilter !== 'ALL' ||
+    methodFilter !== 'ALL' ||
+    partyCategoryFilter !== 'ALL' ||
+    selectedPartyFilter !== 'ALL' ||
+    settlementFilter !== 'ALL' ||
+    datePreset !== 'ALL' ||
+    startDate !== '' ||
+    endDate !== '';
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -214,28 +254,118 @@ export default function PaymentsPage() {
   const payments = data?.payments || [];
   const parties = data?.parties || [];
   const currencies = data?.currencies || [];
+  const transactions = data?.transactions || [];
+  const partyStats = data?.partyStats || {};
 
-  // Filter payments
+  // Filter parties by category if selected
+  const filteredPartiesList =
+    partyCategoryFilter === 'ALL'
+      ? parties
+      : parties.filter((p: any) => p.type === partyCategoryFilter);
+
+  // Active Selected Party Object & Stats for Banker/Customer Spotlight
+  const activePartyObj =
+    selectedPartyFilter !== 'ALL'
+      ? parties.find((p: any) => p.id === selectedPartyFilter)
+      : null;
+
+  const activePartyStats = activePartyObj ? partyStats[activePartyObj.id] : null;
+
+  // Filter party's buying transactions if a banker is selected
+  const activePartyBuyTrades = activePartyObj
+    ? transactions.filter((t: any) => t.partyId === activePartyObj.id)
+    : [];
+
+  // Filter payments list based on all filter parameters
   const filteredPayments = payments.filter((p: any) => {
+    // 1. Text search (receipt, party name, ref #, notes)
     const matchesSearch =
-      p.receiptNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.party.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (p.referenceNo && p.referenceNo.toLowerCase().includes(searchTerm.toLowerCase()));
+      searchTerm.trim() === '' ||
+      p.receiptNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.party?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.referenceNo && p.referenceNo.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (p.notes && p.notes.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    const matchesDirection = directionFilter === 'ALL' || p.type === directionFilter;
-    const matchesMethod = methodFilter === 'ALL' || p.paymentMethod === methodFilter;
+    // 2. Party category
+    const matchesCategory =
+      partyCategoryFilter === 'ALL' || p.party?.type === partyCategoryFilter;
 
-    return matchesSearch && matchesDirection && matchesMethod;
+    // 3. Specific party
+    const matchesParty =
+      selectedPartyFilter === 'ALL' || p.partyId === selectedPartyFilter;
+
+    // 4. Direction (RECEIVED / SENT)
+    const matchesDirection =
+      directionFilter === 'ALL' || p.type === directionFilter;
+
+    // 5. Channel / Method
+    const matchesMethod =
+      methodFilter === 'ALL' || p.paymentMethod === methodFilter;
+
+    // 6. Settlement status filter
+    const stats = partyStats[p.partyId];
+    let matchesSettlement = true;
+    if (settlementFilter === 'PENDING') {
+      matchesSettlement = stats && stats.pendingBalance > 0;
+    } else if (settlementFilter === 'SETTLED') {
+      matchesSettlement = stats && stats.pendingBalance <= 0;
+    }
+
+    // 7. Date range filter
+    let matchesDate = true;
+    if (datePreset !== 'ALL') {
+      const pDate = new Date(p.createdAt);
+      const now = new Date();
+      if (datePreset === 'TODAY') {
+        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        matchesDate = pDate >= start;
+      } else if (datePreset === 'YESTERDAY') {
+        const yStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+        const yEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
+        matchesDate = pDate >= yStart && pDate <= yEnd;
+      } else if (datePreset === 'WEEK') {
+        const wStart = new Date(now);
+        wStart.setDate(wStart.getDate() - 7);
+        matchesDate = pDate >= wStart;
+      } else if (datePreset === 'MONTH') {
+        const mStart = new Date(now);
+        mStart.setDate(mStart.getDate() - 30);
+        matchesDate = pDate >= mStart;
+      } else if (datePreset === 'CUSTOM') {
+        if (startDate) {
+          const s = new Date(startDate);
+          matchesDate = matchesDate && pDate >= s;
+        }
+        if (endDate) {
+          const e = new Date(endDate);
+          e.setHours(23, 59, 59, 999);
+          matchesDate = matchesDate && pDate <= e;
+        }
+      }
+    }
+
+    return (
+      matchesSearch &&
+      matchesCategory &&
+      matchesParty &&
+      matchesDirection &&
+      matchesMethod &&
+      matchesSettlement &&
+      matchesDate
+    );
   });
 
   return (
     <div className="w-full space-y-6">
-      {/* Header & New Payment Button */}
+      {/* Header & Quick Action Buttons */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
             <Banknote className="w-7 h-7 text-emerald-400" /> Buyer & Seller Payments Hub
           </h1>
+          <p className="text-slate-400 text-xs mt-1">
+            Track banker buy trades, customer sell trades, paid settlements, and outstanding balances.
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -248,12 +378,12 @@ export default function PaymentsPage() {
             onClick={() => openNewPaymentModal('SENT')}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold shadow-lg shadow-amber-600/20 transition cursor-pointer"
           >
-            <ArrowUpRight className="w-4 h-4" /> Send Payment (to Seller)
+            <ArrowUpRight className="w-4 h-4" /> Send Payment (to Seller / Banker)
           </button>
         </div>
       </div>
 
-      {/* Metrics Bar */}
+      {/* Financial Metrics Summary Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Metric 1: Received Today */}
         <div className="glass-card rounded-2xl p-5 border border-emerald-500/30 relative overflow-hidden">
@@ -280,10 +410,10 @@ export default function PaymentsPage() {
           <div className="text-2xl font-bold text-amber-400">
             ${summary.todaySent?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </div>
-          <div className="mt-2 text-xs text-slate-400">Total paid to sellers/bankers</div>
+          <div className="mt-2 text-xs text-slate-400">Total paid to bankers / sellers</div>
         </div>
 
-        {/* Metric 3: Net Payment Flow */}
+        {/* Metric 3: Net Cashflow Today */}
         <div className="glass-card rounded-2xl p-5 border border-indigo-500/30 relative overflow-hidden bg-gradient-to-br from-indigo-950/40 to-slate-900/60">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-indigo-300 uppercase tracking-wider">Today's Net Cashflow</span>
@@ -297,69 +427,373 @@ export default function PaymentsPage() {
           <div className="mt-2 text-xs text-indigo-300">Received minus Sent</div>
         </div>
 
-        {/* Metric 4: Total All Time */}
-        <div className="glass-card rounded-2xl p-5 border border-slate-800 relative overflow-hidden">
+        {/* Metric 4: Total Outstanding Banker Balance Owed */}
+        <div className="glass-card rounded-2xl p-5 border border-rose-500/40 relative overflow-hidden bg-gradient-to-br from-rose-950/30 to-slate-900/80">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">All-Time Receipts</span>
-            <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20">
-              <Receipt className="w-4 h-4" />
+            <span className="text-xs font-semibold text-rose-300 uppercase tracking-wider">Total Banker Pending Owed</span>
+            <div className="p-2 rounded-xl bg-rose-500/20 text-rose-400 border border-rose-500/30">
+              <ShieldAlert className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-white">
-            {payments.length} <span className="text-xs text-slate-400 font-normal">Entries</span>
+          <div className="text-2xl font-bold text-rose-400">
+            ₹{summary.totalPendingBankerOwed?.toLocaleString('en-US', { minimumFractionDigits: 2 }) || '0.00'}
           </div>
-          <div className="mt-2 text-xs text-slate-400">Synchronized with Party Ledgers</div>
+          <div className="mt-2 text-xs text-slate-400">Unsettled buy balances owed to bankers</div>
         </div>
       </div>
 
-      {/* Main Content Card: Search, Filters & Payments Table */}
-      <div className="glass-card rounded-2xl p-6 border border-slate-800 space-y-4">
-        {/* Filter Controls Bar */}
-        <div className="flex flex-col md:flex-row items-center justify-between gap-3">
-          {/* Search Box */}
-          <div className="relative w-full md:w-80">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search party name, receipt #, or ref #..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-            />
+      {/* BANKER & PARTY FINANCIAL INTELLIGENCE SPOTLIGHT CARD */}
+      {activePartyObj && activePartyStats && (
+        <div className="glass-card rounded-2xl p-6 border border-indigo-500/50 bg-gradient-to-br from-indigo-950/60 via-slate-900 to-slate-900/90 shadow-2xl space-y-5 animate-fadeIn">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-2xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/40 font-bold text-lg">
+                {activePartyObj.type === 'BANKER' ? <Building2 className="w-6 h-6" /> : <Users className="w-6 h-6" />}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-bold text-white tracking-tight">{activePartyObj.name}</h2>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] uppercase font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                    {activePartyObj.type === 'BANKER' ? 'Seller / Banker' : 'Buyer / Customer'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {activePartyObj.phone || activePartyObj.email || 'Financial Ledger & Trade History Summary'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setSelectedPartyFilter('ALL')}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+              >
+                ✕ Close Spotlight
+              </button>
+              <button
+                onClick={() =>
+                  openNewPaymentModal(activePartyObj.type === 'BANKER' ? 'SENT' : 'RECEIVED', activePartyObj.id)
+                }
+                className={`px-4 py-2 rounded-xl text-white text-xs font-bold transition shadow-lg flex items-center gap-1.5 cursor-pointer ${
+                  activePartyObj.type === 'BANKER'
+                    ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-600/20'
+                    : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/20'
+                }`}
+              >
+                <PlusCircle className="w-4 h-4" />
+                {activePartyObj.type === 'BANKER' ? 'Pay Banker Now' : 'Receive Payment Now'}
+              </button>
+            </div>
           </div>
 
-          {/* Filter Dropdowns */}
-          <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
-            <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl text-xs">
-              <Filter className="w-3.5 h-3.5 text-slate-400" />
-              <select
-                value={directionFilter}
-                onChange={(e) => setDirectionFilter(e.target.value)}
-                className="bg-transparent text-slate-300 font-semibold focus:outline-none"
-              >
-                <option value="ALL">All Payment Types</option>
-                <option value="RECEIVED">📥 Received (from Buyers)</option>
-                <option value="SENT">📤 Sent (to Sellers)</option>
-              </select>
+          {/* Banker Stats Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+            {/* Stat 1: Total USDT Trade Volume */}
+            <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1">
+              <span className="text-slate-400 font-medium">
+                {activePartyObj.type === 'BANKER' ? 'Total Buying Volume (USDT)' : 'Total Selling Volume (USDT)'}
+              </span>
+              <div className="text-xl font-extrabold text-white">
+                {activePartyObj.type === 'BANKER'
+                  ? activePartyStats.totalBuyVolumeUSDT?.toLocaleString('en-US')
+                  : activePartyStats.totalSellVolumeUSDT?.toLocaleString('en-US')}{' '}
+                USDT
+              </div>
+              <span className="text-[10px] text-indigo-400 font-semibold">
+                {activePartyStats.tradeCount} Executed Orders
+              </span>
             </div>
 
-            <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl text-xs">
-              <select
-                value={methodFilter}
-                onChange={(e) => setMethodFilter(e.target.value)}
-                className="bg-transparent text-slate-300 font-semibold focus:outline-none"
-              >
-                <option value="ALL">All Payment Channels</option>
-                <option value="CASH">💵 Cash</option>
-                <option value="BANK">🏛️ Bank Transfer</option>
-                <option value="ONLINE">⚡ Online / Wallet</option>
-                <option value="CHEQUE">📝 Cheque</option>
-              </select>
+            {/* Stat 2: Total Trade Billed Value (INR) */}
+            <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1">
+              <span className="text-slate-400 font-medium">
+                {activePartyObj.type === 'BANKER' ? 'Total Buy Billed (INR)' : 'Total Sell Billed (INR)'}
+              </span>
+              <div className="text-xl font-extrabold text-indigo-300">
+                ₹{activePartyObj.type === 'BANKER'
+                  ? activePartyStats.totalBuyBilledINR?.toLocaleString('en-US', { minimumFractionDigits: 2 })
+                  : activePartyStats.totalSellBilledINR?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </div>
+              <span className="text-[10px] text-slate-400">Calculated trade obligations</span>
             </div>
+
+            {/* Stat 3: Total Paid / Settled */}
+            <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1">
+              <span className="text-slate-400 font-medium">
+                {activePartyObj.type === 'BANKER' ? 'Total Payments Sent (Paid)' : 'Total Payments Received'}
+              </span>
+              <div className="text-xl font-extrabold text-emerald-400">
+                ₹{activePartyObj.type === 'BANKER'
+                  ? activePartyStats.totalPaidSent?.toLocaleString('en-US', { minimumFractionDigits: 2 })
+                  : activePartyStats.totalPaidReceived?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </div>
+              <span className="text-[10px] text-emerald-400 font-semibold">
+                {activePartyStats.paymentCount} Payment Receipts
+              </span>
+            </div>
+
+            {/* Stat 4: Remaining Pending Balance */}
+            <div className={`p-4 rounded-xl border space-y-1 ${
+              activePartyStats.pendingBalance > 0
+                ? 'bg-rose-950/40 border-rose-500/40 text-rose-400'
+                : 'bg-emerald-950/40 border-emerald-500/40 text-emerald-400'
+            }`}>
+              <span className="text-slate-400 font-medium">
+                {activePartyObj.type === 'BANKER' ? 'Pending Owed to Banker' : 'Pending Receivable from Customer'}
+              </span>
+              <div className="text-xl font-extrabold">
+                ₹{Math.abs(activePartyStats.pendingBalance)?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </div>
+              <span className={`inline-block text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
+                activePartyStats.pendingBalance > 0
+                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                  : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+              }`}>
+                {activePartyStats.pendingBalance > 0 ? '⚠️ Unsettled Balance' : '✅ Fully Paid & Settled'}
+              </span>
+            </div>
+          </div>
+
+          {/* Banker Buying Trades History Preview */}
+          {activePartyBuyTrades.length > 0 && (
+            <div className="space-y-2.5 pt-2 border-t border-slate-800">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                  <TrendingUp className="w-4 h-4 text-indigo-400" /> Recent Trades for {activePartyObj.name} ({activePartyBuyTrades.length})
+                </h3>
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-slate-800">
+                <table className="w-full text-left text-xs text-slate-300">
+                  <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
+                    <tr>
+                      <th className="py-2.5 px-3">Receipt #</th>
+                      <th className="py-2.5 px-3">Date</th>
+                      <th className="py-2.5 px-3">Type</th>
+                      <th className="py-2.5 px-3">Amount Given</th>
+                      <th className="py-2.5 px-3">Applied Rate</th>
+                      <th className="py-2.5 px-3">Amount Received</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 bg-slate-950/40">
+                    {activePartyBuyTrades.slice(0, 5).map((tx: any) => (
+                      <tr key={tx.id} className="hover:bg-slate-800/40 text-[11px]">
+                        <td className="py-2 px-3 font-mono font-bold text-indigo-400">{tx.receiptNo}</td>
+                        <td className="py-2 px-3 text-slate-400">{new Date(tx.createdAt).toLocaleDateString()}</td>
+                        <td className="py-2 px-3 font-bold">
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] ${
+                            tx.type === 'BUY' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
+                          }`}>
+                            {tx.type}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 font-bold text-white">
+                          {tx.amountGiven?.toLocaleString()} {tx.fromCurrency}
+                        </td>
+                        <td className="py-2 px-3 text-amber-300 font-mono font-bold">{tx.appliedRate}</td>
+                        <td className="py-2 px-3 font-bold text-emerald-400">
+                          {tx.amountReceived?.toLocaleString()} {tx.toCurrency}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* COMPREHENSIVE MULTI-FILTER CONTROL PANEL */}
+      <div className="glass-card rounded-2xl p-5 border border-slate-800 space-y-4">
+        {/* Row 1: Search Box & Date Presets */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          {/* Search Box */}
+          <div className="relative w-full md:w-96">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search banker name, receipt #, or reference #..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-10 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-medium"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Quick Date Range Chips */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs text-slate-400 font-semibold mr-1 flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5" /> Date:
+            </span>
+            {[
+              { label: 'All Time', value: 'ALL' },
+              { label: 'Today', value: 'TODAY' },
+              { label: 'Yesterday', value: 'YESTERDAY' },
+              { label: 'This Week', value: 'WEEK' },
+              { label: 'This Month', value: 'MONTH' },
+              { label: 'Custom', value: 'CUSTOM' },
+            ].map((p) => (
+              <button
+                key={p.value}
+                onClick={() => setDatePreset(p.value)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                  datePreset === p.value
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-800'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+
+            {hasActiveFilters && (
+              <button
+                onClick={resetAllFilters}
+                className="px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+              >
+                <RotateCcw className="w-3 h-3" /> Clear
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Payments Table */}
+        {/* Custom Date Pickers */}
+        {datePreset === 'CUSTOM' && (
+          <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-800 flex flex-wrap items-center gap-4 animate-fadeIn text-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400 font-semibold">Start Date:</span>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="bg-white text-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 font-bold focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400 font-semibold">End Date:</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="bg-white text-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 font-bold focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+          </div>
+        )}
+
+        <hr className="border-slate-800/80" />
+
+        {/* Row 2: Category, Specific Party, Direction, Payment Channel & Settlement Filter Dropdowns */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          {/* Filter 1: Party Category */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+              Party Category
+            </label>
+            <select
+              value={partyCategoryFilter}
+              onChange={(e) => {
+                setPartyCategoryFilter(e.target.value);
+                setSelectedPartyFilter('ALL');
+              }}
+              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white font-medium text-xs focus:outline-none focus:border-indigo-500"
+            >
+              <option value="ALL">All Categories</option>
+              <option value="BANKER">🏛️ Bankers (Sellers)</option>
+              <option value="CUSTOMER">👥 Customers (Buyers)</option>
+            </select>
+          </div>
+
+          {/* Filter 2: Specific Banker / Person Dropdown */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+              Select Banker / Person
+            </label>
+            <select
+              value={selectedPartyFilter}
+              onChange={(e) => setSelectedPartyFilter(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white font-medium text-xs focus:outline-none focus:border-indigo-500"
+            >
+              <option value="ALL">All Persons / Bankers</option>
+              {filteredPartiesList.map((p: any) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.type})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filter 3: Payment Direction */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+              Payment Direction
+            </label>
+            <select
+              value={directionFilter}
+              onChange={(e) => setDirectionFilter(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white font-medium text-xs focus:outline-none focus:border-indigo-500"
+            >
+              <option value="ALL">All Directions</option>
+              <option value="RECEIVED">📥 Received (from Buyers)</option>
+              <option value="SENT">📤 Sent (to Sellers / Bankers)</option>
+            </select>
+          </div>
+
+          {/* Filter 4: Payment Channel */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+              Payment Channel
+            </label>
+            <select
+              value={methodFilter}
+              onChange={(e) => setMethodFilter(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white font-medium text-xs focus:outline-none focus:border-indigo-500"
+            >
+              <option value="ALL">All Channels</option>
+              <option value="CASH">💵 Physical Cash</option>
+              <option value="BANK">🏛️ Bank Transfer</option>
+              <option value="ONLINE">⚡ Online Wallet</option>
+              <option value="CHEQUE">📝 Bank Cheque</option>
+            </select>
+          </div>
+
+          {/* Filter 5: Settlement Status */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+              Settlement Status
+            </label>
+            <select
+              value={settlementFilter}
+              onChange={(e) => setSettlementFilter(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white font-medium text-xs focus:outline-none focus:border-indigo-500"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="PENDING">⚠️ Pending Balance Only</option>
+              <option value="SETTLED">✅ Fully Settled Parties</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Payments Table */}
+      <div className="glass-card rounded-2xl p-6 border border-slate-800 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold text-white flex items-center gap-2">
+            <Receipt className="w-4 h-4 text-indigo-400" /> Payment Receipts Audit Log ({filteredPayments.length})
+          </h2>
+          <span className="text-xs text-slate-400">
+            Showing matching entries
+          </span>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-300">
             <thead className="bg-slate-900/80 text-slate-400 uppercase text-[11px] tracking-wider border-b border-slate-800">
@@ -377,14 +811,26 @@ export default function PaymentsPage() {
             <tbody className="divide-y divide-slate-800/60">
               {filteredPayments.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-xs text-slate-500">
-                    No payment records match your filters.
+                  <td colSpan={8} className="py-12 text-center text-xs text-slate-500">
+                    <div className="space-y-2">
+                      <Banknote className="w-8 h-8 mx-auto text-slate-600" />
+                      <p className="font-semibold text-slate-400">No payment records match your filters.</p>
+                      {hasActiveFilters && (
+                        <button
+                          onClick={resetAllFilters}
+                          className="text-xs text-indigo-400 hover:text-indigo-300 font-bold underline"
+                        >
+                          Reset all search filters
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (
                 filteredPayments.map((p: any) => {
                   const isReceived = p.type === 'RECEIVED';
                   const isCustomer = p.party?.type === 'CUSTOMER';
+                  const pStats = partyStats[p.partyId];
 
                   return (
                     <tr key={p.id} className="hover:bg-slate-800/40 transition text-xs">
@@ -396,7 +842,11 @@ export default function PaymentsPage() {
                         {new Date(p.createdAt).toLocaleString()}
                       </td>
                       <td className="py-3.5 px-4">
-                        <div className="font-bold text-white flex items-center gap-1.5">
+                        <div
+                          onClick={() => setSelectedPartyFilter(p.partyId)}
+                          className="font-bold text-white flex items-center gap-1.5 cursor-pointer hover:text-indigo-400 transition"
+                          title="Click to view Banker Buying Data Spotlight"
+                        >
                           {isCustomer ? (
                             <Users className="w-3.5 h-3.5 text-emerald-400" />
                           ) : (
@@ -404,9 +854,16 @@ export default function PaymentsPage() {
                           )}
                           <span>{p.party?.name}</span>
                         </div>
-                        <span className="text-[10px] text-slate-400 uppercase font-semibold">
-                          {isCustomer ? 'Buyer / Customer' : 'Seller / Banker'}
-                        </span>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[10px] text-slate-400 uppercase font-semibold">
+                            {isCustomer ? 'Buyer / Customer' : 'Seller / Banker'}
+                          </span>
+                          {pStats && pStats.pendingBalance > 0 && (
+                            <span className="text-[9px] font-bold text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded">
+                              Owed: ₹{pStats.pendingBalance.toLocaleString()}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3.5 px-4">
                         <span
@@ -424,7 +881,7 @@ export default function PaymentsPage() {
                         {p.paymentMethod === 'BANK' && '🏛️ Bank Transfer'}
                         {p.paymentMethod === 'CASH' && '💵 Cash Safe'}
                         {p.paymentMethod === 'ONLINE' && '⚡ Online Payment'}
-                        {p.paymentMethod === 'CHEQUE' && '📝 Cheque'}
+                        {p.paymentMethod === 'CHEQUE' && '📝 Bank Cheque'}
                       </td>
                       <td className="py-3.5 px-4 text-right font-extrabold text-white text-sm">
                         <span className={isReceived ? 'text-emerald-400' : 'text-amber-400'}>
@@ -504,7 +961,7 @@ export default function PaymentsPage() {
                   type="datetime-local"
                   value={customDateTime}
                   onChange={(e) => setCustomDateTime(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white font-mono focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-white text-slate-900 border border-slate-800 rounded-xl px-3.5 py-2.5 font-bold focus:outline-none focus:border-indigo-500"
                   required
                 />
               </div>
@@ -535,7 +992,7 @@ export default function PaymentsPage() {
                         : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
                     }`}
                   >
-                    <ArrowUpRight className="w-4 h-4" /> Sent (to Seller)
+                    <ArrowUpRight className="w-4 h-4" /> Sent (to Seller / Banker)
                   </button>
                 </div>
               </div>
@@ -724,13 +1181,13 @@ export default function PaymentsPage() {
             <div className="flex items-center justify-between pt-2">
               <button
                 onClick={() => window.print()}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition cursor-pointer"
               >
                 <Printer className="w-3.5 h-3.5" /> Print Voucher
               </button>
               <button
                 onClick={() => setSelectedReceipt(null)}
-                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition"
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition cursor-pointer"
               >
                 Close
               </button>
@@ -765,7 +1222,7 @@ export default function PaymentsPage() {
                   type="datetime-local"
                   value={editingPayment.createdAt || ''}
                   onChange={(e) => setEditingPayment({ ...editingPayment, createdAt: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white font-mono focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-white text-slate-900 border border-slate-800 rounded-xl px-3.5 py-2.5 font-bold focus:outline-none focus:border-indigo-500"
                   required
                 />
               </div>
