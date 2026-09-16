@@ -762,7 +762,13 @@ export default function PaymentsPage() {
       <style>{`
         @media print {
           @page {
-            margin: 10mm;
+            margin: 0;
+            size: auto;
+          }
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #ffffff !important;
           }
           body * {
             visibility: hidden !important;
@@ -779,7 +785,8 @@ export default function PaymentsPage() {
             color: #000000 !important;
             display: block !important;
             margin: 0 !important;
-            padding: 10px !important;
+            padding: 15mm !important;
+            box-sizing: border-box !important;
           }
         }
       `}</style>
