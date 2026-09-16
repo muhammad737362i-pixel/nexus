@@ -263,9 +263,52 @@ export default function PaymentsPage() {
       ? parties
       : parties.filter((p: any) => p.type === partyCategoryFilter);
 
-  // Default USD/USDT Rate for INR conversion if needed
-  const usdCurr = currencies.find((c: any) => c.code === 'USD' || c.code === 'USDT');
-  const usdtRate = usdCurr?.defaultBuyRate || 88;
+  // Helper: calculate total USDT trade volume for a transaction
+  const getTxUsdtVolume = (tx: any) => {
+    if (tx.toCurrency === 'USDT' || tx.toCurrency === 'USD') {
+      return tx.amountReceived || 0;
+    } else if (tx.fromCurrency === 'USDT' || tx.fromCurrency === 'USD') {
+      return tx.amountGiven || 0;
+    } else if (tx.appliedRate > 0) {
+      return (tx.amountGiven || 0) / tx.appliedRate;
+    }
+    return 0;
+  };
+
+  // Helper: calculate total USDT amount for a payment record
+  const getPayUsdtAmount = (p: any) => {
+    let amt = p.amount || 0;
+    if (p.currencyCode === 'INR') {
+      amt = amt / usdtRate;
+    }
+    return amt;
+  };
+
+  // Map lifetime Expected USDT, Paid USDT, and Pending USDT for each party
+  const partyLifetimeStats: Record<string, { expectedUSDT: number; paidUSDT: number; pendingUSDT: number }> = {};
+
+  parties.forEach((p: any) => {
+    partyLifetimeStats[p.id] = { expectedUSDT: 0, paidUSDT: 0, pendingUSDT: 0 };
+  });
+
+  transactions.forEach((tx: any) => {
+    if (partyLifetimeStats[tx.partyId]) {
+      partyLifetimeStats[tx.partyId].expectedUSDT += getTxUsdtVolume(tx);
+    }
+  });
+
+  payments.forEach((p: any) => {
+    if (partyLifetimeStats[p.partyId]) {
+      partyLifetimeStats[p.partyId].paidUSDT += getPayUsdtAmount(p);
+    }
+  });
+
+  parties.forEach((p: any) => {
+    const s = partyLifetimeStats[p.id];
+    if (s) {
+      s.pendingUSDT = Number((s.expectedUSDT - s.paidUSDT).toFixed(2));
+    }
+  });
 
   // Filter trade transactions matching active filters for Expected Amount (USDT)
   const filteredTransactions = transactions.filter((tx: any) => {
@@ -322,15 +365,7 @@ export default function PaymentsPage() {
     selectedPartyFilter === 'ALL' && searchTerm.trim() === ''
       ? 0
       : filteredTransactions.reduce((acc: number, tx: any) => {
-          let vol = 0;
-          if (tx.toCurrency === 'USDT' || tx.toCurrency === 'USD') {
-            vol = tx.amountReceived;
-          } else if (tx.fromCurrency === 'USDT' || tx.fromCurrency === 'USD') {
-            vol = tx.amountGiven;
-          } else if (tx.appliedRate > 0) {
-            vol = tx.amountGiven / tx.appliedRate;
-          }
-          return acc + vol;
+          return acc + getTxUsdtVolume(tx);
         }, 0);
 
   // Filter payments list based on all filter parameters
@@ -360,12 +395,12 @@ export default function PaymentsPage() {
       methodFilter === 'ALL' || p.paymentMethod === methodFilter;
 
     // 6. Settlement status filter
-    const stats = partyStats[p.partyId];
+    const stats = partyLifetimeStats[p.partyId];
     let matchesSettlement = true;
     if (settlementFilter === 'PENDING') {
-      matchesSettlement = stats && stats.pendingBalance > 0;
+      matchesSettlement = stats && stats.pendingUSDT > 0;
     } else if (settlementFilter === 'SETTLED') {
-      matchesSettlement = stats && stats.pendingBalance <= 0;
+      matchesSettlement = stats && stats.pendingUSDT <= 0;
     }
 
     // 7. Date range filter
@@ -414,28 +449,23 @@ export default function PaymentsPage() {
 
   // Calculate Filter-reactive Paid Amount (USDT)
   const totalPaidUSDT = filteredPayments.reduce((acc: number, p: any) => {
-    let amt = p.amount;
-    if (p.currencyCode === 'INR') {
-      amt = p.amount / usdtRate;
-    }
-    return acc + amt;
+    return acc + getPayUsdtAmount(p);
   }, 0);
 
-  // Calculate Overall Pending Amount (USDT) - Always overall lifetime balance
-  let totalOverallPendingINR = 0;
+  // Calculate Overall Pending Amount (USDT) - Lifetime expected USDT minus paid USDT
+  let totalOverallPendingUSDT = 0;
   if (selectedPartyFilter !== 'ALL') {
-    const pStat = partyStats[selectedPartyFilter];
-    totalOverallPendingINR = pStat ? pStat.pendingBalance : 0;
+    const pStat = partyLifetimeStats[selectedPartyFilter];
+    totalOverallPendingUSDT = pStat ? pStat.pendingUSDT : 0;
   } else {
-    if (partyCategoryFilter === 'BANKER') {
-      totalOverallPendingINR = summary.totalPendingBankerOwed || 0;
-    } else if (partyCategoryFilter === 'CUSTOMER') {
-      totalOverallPendingINR = summary.totalPendingCustomerReceivable || 0;
-    } else {
-      totalOverallPendingINR = (summary.totalPendingBankerOwed || 0) + (summary.totalPendingCustomerReceivable || 0);
-    }
+    parties.forEach((p: any) => {
+      const pStat = partyLifetimeStats[p.id];
+      if (!pStat || pStat.pendingUSDT <= 0) return;
+      if (partyCategoryFilter === 'ALL' || p.type === partyCategoryFilter) {
+        totalOverallPendingUSDT += pStat.pendingUSDT;
+      }
+    });
   }
-  const totalOverallPendingUSDT = totalOverallPendingINR / usdtRate;
 
   return (
     <div className="w-full space-y-6">
@@ -748,7 +778,7 @@ export default function PaymentsPage() {
                 filteredPayments.map((p: any) => {
                   const isReceived = p.type === 'RECEIVED';
                   const isCustomer = p.party?.type === 'CUSTOMER';
-                  const pStats = partyStats[p.partyId];
+                  const pStats = partyLifetimeStats[p.partyId];
 
                   return (
                     <tr key={p.id} className="hover:bg-slate-800/40 transition text-xs">
@@ -763,7 +793,7 @@ export default function PaymentsPage() {
                         <div
                           onClick={() => setSelectedPartyFilter(p.partyId)}
                           className="font-bold text-white flex items-center gap-1.5 cursor-pointer hover:text-indigo-400 transition"
-                          title="Click to view Banker Buying Data Spotlight"
+                          title="Click to filter by this party"
                         >
                           {isCustomer ? (
                             <Users className="w-3.5 h-3.5 text-emerald-400" />
@@ -776,9 +806,9 @@ export default function PaymentsPage() {
                           <span className="text-[10px] text-slate-400 uppercase font-semibold">
                             {isCustomer ? 'Buyer / Customer' : 'Seller / Banker'}
                           </span>
-                          {pStats && pStats.pendingBalance > 0 && (
+                          {pStats && pStats.pendingUSDT > 0 && (
                             <span className="text-[9px] font-bold text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded">
-                              Owed: ₹{pStats.pendingBalance.toLocaleString()}
+                              Owed: ${pStats.pendingUSDT.toLocaleString('en-US', { minimumFractionDigits: 2 })} USDT
                             </span>
                           )}
                         </div>
