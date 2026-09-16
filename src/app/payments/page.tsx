@@ -263,6 +263,10 @@ export default function PaymentsPage() {
       ? parties
       : parties.filter((p: any) => p.type === partyCategoryFilter);
 
+  // Default USD/USDT Rate for INR conversion if needed
+  const usdCurr = currencies.find((c: any) => c.code === 'USD' || c.code === 'USDT');
+  const usdtRate = usdCurr?.defaultBuyRate || 88;
+
   // Helper: calculate total USDT trade volume for a transaction
   const getTxUsdtVolume = (tx: any) => {
     if (tx.toCurrency === 'USDT' || tx.toCurrency === 'USD') {
