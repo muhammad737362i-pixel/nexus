@@ -332,151 +332,156 @@ export default function PaymentsPage() {
     }
   });
 
+  // Check if user has explicitly selected a party, category, or typed a search term
+  const hasSpecificSelection =
+    selectedPartyFilter !== 'ALL' ||
+    searchTerm.trim() !== '' ||
+    partyCategoryFilter !== 'ALL';
+
   // Filter trade transactions matching active filters for Expected Amount (USDT)
-  const filteredTransactions = transactions.filter((tx: any) => {
-    const matchesSearch =
-      searchTerm.trim() === '' ||
-      tx.receiptNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tx.party?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (tx.notes && tx.notes.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredTransactions = !hasSpecificSelection
+    ? []
+    : transactions.filter((tx: any) => {
+        const matchesSearch =
+          searchTerm.trim() === '' ||
+          tx.receiptNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          tx.party?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (tx.notes && tx.notes.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    const matchesCategory =
-      partyCategoryFilter === 'ALL' || tx.party?.type === partyCategoryFilter;
+        const matchesCategory =
+          partyCategoryFilter === 'ALL' || tx.party?.type === partyCategoryFilter;
 
-    const matchesParty =
-      selectedPartyFilter === 'ALL' || tx.partyId === selectedPartyFilter;
+        const matchesParty =
+          selectedPartyFilter === 'ALL' || tx.partyId === selectedPartyFilter;
 
-    let matchesDate = true;
-    if (datePreset !== 'ALL') {
-      const tDate = new Date(tx.createdAt);
-      const now = new Date();
-      if (datePreset === 'TODAY') {
-        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        matchesDate = tDate >= start;
-      } else if (datePreset === 'YESTERDAY') {
-        const yStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-        const yEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
-        matchesDate = tDate >= yStart && tDate <= yEnd;
-      } else if (datePreset === 'WEEK') {
-        const wStart = new Date(now);
-        wStart.setDate(wStart.getDate() - 7);
-        matchesDate = tDate >= wStart;
-      } else if (datePreset === 'MONTH') {
-        const mStart = new Date(now);
-        mStart.setDate(mStart.getDate() - 30);
-        matchesDate = tDate >= mStart;
-      } else if (datePreset === 'CUSTOM') {
-        if (startDate) {
-          const s = new Date(startDate);
-          matchesDate = matchesDate && tDate >= s;
+        let matchesDate = true;
+        if (datePreset !== 'ALL') {
+          const tDate = new Date(tx.createdAt);
+          const now = new Date();
+          if (datePreset === 'TODAY') {
+            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            matchesDate = tDate >= start;
+          } else if (datePreset === 'YESTERDAY') {
+            const yStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+            const yEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
+            matchesDate = tDate >= yStart && tDate <= yEnd;
+          } else if (datePreset === 'WEEK') {
+            const wStart = new Date(now);
+            wStart.setDate(wStart.getDate() - 7);
+            matchesDate = tDate >= wStart;
+          } else if (datePreset === 'MONTH') {
+            const mStart = new Date(now);
+            mStart.setDate(mStart.getDate() - 30);
+            matchesDate = tDate >= mStart;
+          } else if (datePreset === 'CUSTOM') {
+            if (startDate) {
+              const s = new Date(startDate);
+              matchesDate = matchesDate && tDate >= s;
+            }
+            if (endDate) {
+              const e = new Date(endDate);
+              e.setHours(23, 59, 59, 999);
+              matchesDate = matchesDate && tDate <= e;
+            }
+          }
         }
-        if (endDate) {
-          const e = new Date(endDate);
-          e.setHours(23, 59, 59, 999);
-          matchesDate = matchesDate && tDate <= e;
-        }
-      }
-    }
 
-    return matchesSearch && matchesCategory && matchesParty && matchesDate;
-  });
+        return matchesSearch && matchesCategory && matchesParty && matchesDate;
+      });
 
   // Calculate Filter-reactive Expected Amount (USDT)
-  // Show 0 ($0.00 USDT) when no specific banker or customer is selected
-  const totalExpectedUSDT =
-    selectedPartyFilter === 'ALL' && searchTerm.trim() === ''
-      ? 0
-      : filteredTransactions.reduce((acc: number, tx: any) => {
-          return acc + getTxUsdtVolume(tx);
-        }, 0);
+  const totalExpectedUSDT = !hasSpecificSelection
+    ? 0
+    : filteredTransactions.reduce((acc: number, tx: any) => {
+        return acc + getTxUsdtVolume(tx);
+      }, 0);
 
   // Filter payments list based on all filter parameters
-  const filteredPayments = payments.filter((p: any) => {
-    // 1. Text search (receipt, party name, ref #, notes)
-    const matchesSearch =
-      searchTerm.trim() === '' ||
-      p.receiptNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.party?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (p.referenceNo && p.referenceNo.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (p.notes && p.notes.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredPayments = !hasSpecificSelection
+    ? []
+    : payments.filter((p: any) => {
+        const matchesSearch =
+          searchTerm.trim() === '' ||
+          p.receiptNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          p.party?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (p.referenceNo && p.referenceNo.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (p.notes && p.notes.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    // 2. Party category
-    const matchesCategory =
-      partyCategoryFilter === 'ALL' || p.party?.type === partyCategoryFilter;
+        const matchesCategory =
+          partyCategoryFilter === 'ALL' || p.party?.type === partyCategoryFilter;
 
-    // 3. Specific party
-    const matchesParty =
-      selectedPartyFilter === 'ALL' || p.partyId === selectedPartyFilter;
+        const matchesParty =
+          selectedPartyFilter === 'ALL' || p.partyId === selectedPartyFilter;
 
-    // 4. Direction (RECEIVED / SENT)
-    const matchesDirection =
-      directionFilter === 'ALL' || p.type === directionFilter;
+        const matchesDirection =
+          directionFilter === 'ALL' || p.type === directionFilter;
 
-    // 5. Channel / Method
-    const matchesMethod =
-      methodFilter === 'ALL' || p.paymentMethod === methodFilter;
+        const matchesMethod =
+          methodFilter === 'ALL' || p.paymentMethod === methodFilter;
 
-    // 6. Settlement status filter
-    const stats = partyLifetimeStats[p.partyId];
-    let matchesSettlement = true;
-    if (settlementFilter === 'PENDING') {
-      matchesSettlement = stats && stats.pendingUSDT > 0;
-    } else if (settlementFilter === 'SETTLED') {
-      matchesSettlement = stats && stats.pendingUSDT <= 0;
-    }
-
-    // 7. Date range filter
-    let matchesDate = true;
-    if (datePreset !== 'ALL') {
-      const pDate = new Date(p.createdAt);
-      const now = new Date();
-      if (datePreset === 'TODAY') {
-        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        matchesDate = pDate >= start;
-      } else if (datePreset === 'YESTERDAY') {
-        const yStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-        const yEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
-        matchesDate = pDate >= yStart && pDate <= yEnd;
-      } else if (datePreset === 'WEEK') {
-        const wStart = new Date(now);
-        wStart.setDate(wStart.getDate() - 7);
-        matchesDate = pDate >= wStart;
-      } else if (datePreset === 'MONTH') {
-        const mStart = new Date(now);
-        mStart.setDate(mStart.getDate() - 30);
-        matchesDate = pDate >= mStart;
-      } else if (datePreset === 'CUSTOM') {
-        if (startDate) {
-          const s = new Date(startDate);
-          matchesDate = matchesDate && pDate >= s;
+        const stats = partyLifetimeStats[p.partyId];
+        let matchesSettlement = true;
+        if (settlementFilter === 'PENDING') {
+          matchesSettlement = stats && stats.pendingUSDT > 0;
+        } else if (settlementFilter === 'SETTLED') {
+          matchesSettlement = stats && stats.pendingUSDT <= 0;
         }
-        if (endDate) {
-          const e = new Date(endDate);
-          e.setHours(23, 59, 59, 999);
-          matchesDate = matchesDate && pDate <= e;
-        }
-      }
-    }
 
-    return (
-      matchesSearch &&
-      matchesCategory &&
-      matchesParty &&
-      matchesDirection &&
-      matchesMethod &&
-      matchesSettlement &&
-      matchesDate
-    );
-  });
+        let matchesDate = true;
+        if (datePreset !== 'ALL') {
+          const pDate = new Date(p.createdAt);
+          const now = new Date();
+          if (datePreset === 'TODAY') {
+            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            matchesDate = pDate >= start;
+          } else if (datePreset === 'YESTERDAY') {
+            const yStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+            const yEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
+            matchesDate = pDate >= yStart && pDate <= yEnd;
+          } else if (datePreset === 'WEEK') {
+            const wStart = new Date(now);
+            wStart.setDate(wStart.getDate() - 7);
+            matchesDate = pDate >= wStart;
+          } else if (datePreset === 'MONTH') {
+            const mStart = new Date(now);
+            mStart.setDate(mStart.getDate() - 30);
+            matchesDate = pDate >= mStart;
+          } else if (datePreset === 'CUSTOM') {
+            if (startDate) {
+              const s = new Date(startDate);
+              matchesDate = matchesDate && pDate >= s;
+            }
+            if (endDate) {
+              const e = new Date(endDate);
+              e.setHours(23, 59, 59, 999);
+              matchesDate = matchesDate && pDate <= e;
+            }
+          }
+        }
+
+        return (
+          matchesSearch &&
+          matchesCategory &&
+          matchesParty &&
+          matchesDirection &&
+          matchesMethod &&
+          matchesSettlement &&
+          matchesDate
+        );
+      });
 
   // Calculate Filter-reactive Paid Amount (USDT)
-  const totalPaidUSDT = filteredPayments.reduce((acc: number, p: any) => {
-    return acc + getPayUsdtAmount(p);
-  }, 0);
+  const totalPaidUSDT = !hasSpecificSelection
+    ? 0
+    : filteredPayments.reduce((acc: number, p: any) => {
+        return acc + getPayUsdtAmount(p);
+      }, 0);
 
-  // Calculate Overall Pending Amount (USDT) - Lifetime expected USDT minus paid USDT
+  // Calculate Overall Pending Amount (USDT)
   let totalOverallPendingUSDT = 0;
-  if (selectedPartyFilter !== 'ALL') {
+  if (!hasSpecificSelection) {
+    totalOverallPendingUSDT = 0;
+  } else if (selectedPartyFilter !== 'ALL') {
     const pStat = partyLifetimeStats[selectedPartyFilter];
     totalOverallPendingUSDT = pStat ? pStat.pendingUSDT : 0;
   } else {
@@ -959,8 +964,12 @@ export default function PaymentsPage() {
                     <td colSpan={8} className="py-12 text-center text-xs text-slate-500">
                       <div className="space-y-2">
                         <Banknote className="w-8 h-8 mx-auto text-slate-600" />
-                        <p className="font-semibold text-slate-400">No payment records match your filters.</p>
-                        {hasActiveFilters && (
+                        <p className="font-semibold text-slate-400">
+                          {!hasSpecificSelection
+                            ? 'Please select a Banker / Customer from the dropdown or enter a search term above to view payment records.'
+                            : 'No payment records match your filters.'}
+                        </p>
+                        {hasActiveFilters && hasSpecificSelection && (
                           <button
                             onClick={resetAllFilters}
                             className="text-xs text-indigo-400 hover:text-indigo-300 font-bold underline no-print"
@@ -1088,8 +1097,12 @@ export default function PaymentsPage() {
                     <td colSpan={8} className="py-12 text-center text-xs text-slate-500">
                       <div className="space-y-2">
                         <TrendingUp className="w-8 h-8 mx-auto text-slate-600" />
-                        <p className="font-semibold text-slate-400">No trade records match your filters.</p>
-                        {hasActiveFilters && (
+                        <p className="font-semibold text-slate-400">
+                          {!hasSpecificSelection
+                            ? 'Please select a Banker / Customer from the dropdown or enter a search term above to view trade history.'
+                            : 'No trade records match your filters.'}
+                        </p>
+                        {hasActiveFilters && hasSpecificSelection && (
                           <button
                             onClick={resetAllFilters}
                             className="text-xs text-indigo-400 hover:text-indigo-300 font-bold underline no-print"
