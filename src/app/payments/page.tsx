@@ -234,6 +234,21 @@ export default function PaymentsPage() {
     setEndDate('');
   };
 
+  const handleDownloadPDF = () => {
+    const activeParty = selectedPartyFilter !== 'ALL' ? parties.find((p: any) => p.id === selectedPartyFilter) : null;
+    const rawName = activeParty ? activeParty.name : 'All_Parties';
+    const cleanName = rawName.replace(/[^a-zA-Z0-9_\-]/g, '_');
+    const dateStr = new Date().toISOString().split('T')[0];
+    const originalTitle = document.title;
+
+    document.title = `${cleanName}_Financial_Statement_${dateStr}`;
+    window.print();
+
+    setTimeout(() => {
+      document.title = originalTitle;
+    }, 1000);
+  };
+
   const hasActiveFilters =
     searchTerm !== '' ||
     directionFilter !== 'ALL' ||
@@ -741,36 +756,149 @@ export default function PaymentsPage() {
       {/* Print PDF Global Styles */}
       <style>{`
         @media print {
-          body {
-            background-color: #ffffff !important;
-            color: #000000 !important;
+          body * {
+            visibility: hidden !important;
           }
-          header, sidebar, nav, button, input, select, .no-print {
-            display: none !important;
+          #pdf-print-statement, #pdf-print-statement * {
+            visibility: visible !important;
           }
-          .glass-card {
-            border: 1px solid #ccc !important;
-            background: #fff !important;
-            color: #000 !important;
-            box-shadow: none !important;
-          }
-          .text-white, .text-slate-300, .text-slate-400 {
-            color: #000 !important;
-          }
-          table {
+          #pdf-print-statement {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
             width: 100% !important;
-            border-collapse: collapse !important;
-          }
-          th, td {
-            border: 1px solid #ddd !important;
-            padding: 8px !important;
-            color: #000 !important;
-          }
-          th {
-            background-color: #f2f2f2 !important;
+            background: #ffffff !important;
+            color: #000000 !important;
+            display: block !important;
+            margin: 0 !important;
+            padding: 20px !important;
           }
         }
       `}</style>
+
+      {/* DEDICATED CLEAN PRINTABLE CONTAINER (Only visible when saving/printing PDF) */}
+      <div id="pdf-print-statement" className="hidden font-sans space-y-6">
+        {/* Printable Header */}
+        <div className="flex items-center justify-between border-b-2 border-slate-900 pb-4">
+          <div>
+            <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight">
+              NEXUS Exchange — Account Statement
+            </h1>
+            <p className="text-xs text-slate-600 font-medium">
+              Official Ledger & Financial Activity Summary
+            </p>
+          </div>
+          <div className="text-right text-xs font-mono text-slate-700 space-y-1">
+            <div><strong className="text-slate-900">Date:</strong> {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+            <div>
+              <strong className="text-slate-900">Account / Party:</strong>{' '}
+              {selectedPartyFilter !== 'ALL'
+                ? parties.find((p: any) => p.id === selectedPartyFilter)?.name || 'Selected Person'
+                : 'All Parties & Bankers'}
+            </div>
+          </div>
+        </div>
+
+        {/* 3 Main Metric Boxes (Expected, Paid, Pending) */}
+        <div className="grid grid-cols-3 gap-4 text-center my-4">
+          <div className="p-4 border border-slate-300 rounded-xl bg-slate-50">
+            <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Expected Amount (USDT)</div>
+            <div className="text-xl font-extrabold text-slate-900 mt-1">
+              ${totalExpectedUSDT.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
+            </div>
+          </div>
+
+          <div className="p-4 border border-emerald-300 rounded-xl bg-emerald-50">
+            <div className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Paid Amount (USDT)</div>
+            <div className="text-xl font-extrabold text-emerald-900 mt-1">
+              ${totalPaidUSDT.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
+            </div>
+          </div>
+
+          <div className="p-4 border border-amber-300 rounded-xl bg-amber-50">
+            <div className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Overall Pending (USDT)</div>
+            <div className="text-xl font-extrabold text-amber-900 mt-1">
+              ${Math.abs(totalOverallPendingUSDT).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
+            </div>
+          </div>
+        </div>
+
+        {/* Trade Transactions Table */}
+        {filteredTransactions.length > 0 && (
+          <div className="space-y-2 pt-2">
+            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider border-b border-slate-300 pb-1">
+              1. Executed Trade Orders History ({filteredTransactions.length})
+            </h3>
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-100 text-slate-900 uppercase text-[10px] border-b border-slate-400">
+                  <th className="py-2 px-2">Receipt #</th>
+                  <th className="py-2 px-2">Date & Time</th>
+                  <th className="py-2 px-2">Party Name</th>
+                  <th className="py-2 px-2">Type</th>
+                  <th className="py-2 px-2 text-right">Amount Given</th>
+                  <th className="py-2 px-2 text-right">Applied Rate</th>
+                  <th className="py-2 px-2 text-right">Amount Received</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {filteredTransactions.map((tx: any) => (
+                  <tr key={tx.id} className="text-[11px]">
+                    <td className="py-2 px-2 font-mono font-bold text-slate-900">{tx.receiptNo}</td>
+                    <td className="py-2 px-2 text-slate-700">{new Date(tx.createdAt).toLocaleString()}</td>
+                    <td className="py-2 px-2 font-bold text-slate-900">{tx.party?.name}</td>
+                    <td className="py-2 px-2 font-bold">{tx.type}</td>
+                    <td className="py-2 px-2 text-right font-bold">{tx.amountGiven?.toLocaleString()} {tx.fromCurrency}</td>
+                    <td className="py-2 px-2 text-right font-mono font-bold">{tx.appliedRate}</td>
+                    <td className="py-2 px-2 text-right font-bold text-slate-900">{tx.amountReceived?.toLocaleString()} {tx.toCurrency}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Paid Payments Receipts Table */}
+        {filteredPayments.length > 0 && (
+          <div className="space-y-2 pt-4">
+            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider border-b border-slate-300 pb-1">
+              2. Settled Payments Log ({filteredPayments.length})
+            </h3>
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-100 text-slate-900 uppercase text-[10px] border-b border-slate-400">
+                  <th className="py-2 px-2">Receipt #</th>
+                  <th className="py-2 px-2">Date & Time</th>
+                  <th className="py-2 px-2">Party Name</th>
+                  <th className="py-2 px-2">Direction</th>
+                  <th className="py-2 px-2">Channel</th>
+                  <th className="py-2 px-2 text-right">Amount</th>
+                  <th className="py-2 px-2">Reference / Notes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {filteredPayments.map((p: any) => (
+                  <tr key={p.id} className="text-[11px]">
+                    <td className="py-2 px-2 font-mono font-bold text-slate-900">{p.receiptNo}</td>
+                    <td className="py-2 px-2 text-slate-700">{new Date(p.createdAt).toLocaleString()}</td>
+                    <td className="py-2 px-2 font-bold text-slate-900">{p.party?.name}</td>
+                    <td className="py-2 px-2 font-bold">{p.type}</td>
+                    <td className="py-2 px-2">{p.paymentMethod}</td>
+                    <td className="py-2 px-2 text-right font-bold text-slate-900">${p.amount?.toLocaleString('en-US', { minimumFractionDigits: 2 })} {p.currencyCode}</td>
+                    <td className="py-2 px-2 text-slate-700">{p.referenceNo || p.notes || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="pt-6 border-t border-slate-300 flex justify-between text-[10px] text-slate-500 font-mono">
+          <div>Report generated automatically by NEXUS Suite</div>
+          <div>Official Financial Record</div>
+        </div>
+      </div>
 
       {/* Main Container: Payments & Trade History Tables */}
       <div className="glass-card rounded-2xl p-6 border border-slate-800 space-y-4">
@@ -802,7 +930,7 @@ export default function PaymentsPage() {
 
           {/* PDF Download Button */}
           <button
-            onClick={() => window.print()}
+            onClick={handleDownloadPDF}
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow-md cursor-pointer border border-indigo-500/30"
           >
             <Printer className="w-4 h-4" /> Download PDF Report
