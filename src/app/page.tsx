@@ -51,42 +51,40 @@ export default function Dashboard() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
+  const nowObj = new Date();
+  const todayStr = `${nowObj.getFullYear()}-${String(nowObj.getMonth() + 1).padStart(2, '0')}-${String(nowObj.getDate()).padStart(2, '0')}`;
+
   // Compute ISO date range from preset or custom input
   const getComputedDates = () => {
     if (datePreset === 'CUSTOM') {
       return { start: startDate, end: endDate };
     }
-    const now = new Date();
+    const targetDateStr = workingDate || todayStr;
+    const parts = targetDateStr.split('-').map(Number);
+    const y = parts[0] || nowObj.getFullYear();
+    const m = (parts[1] || nowObj.getMonth() + 1) - 1;
+    const d = parts[2] || nowObj.getDate();
+
     if (datePreset === 'TODAY') {
-      if (workingDate) {
-        const parts = workingDate.split('-');
-        const y = parseInt(parts[0], 10);
-        const m = parseInt(parts[1], 10) - 1;
-        const d = parseInt(parts[2], 10);
-        const start = new Date(y, m, d, 0, 0, 0, 0).toISOString();
-        const end = new Date(y, m, d, 23, 59, 59, 999).toISOString();
-        return { start, end };
-      }
-      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
+      const start = new Date(y, m, d, 0, 0, 0, 0).toISOString();
+      const end = new Date(y, m, d, 23, 59, 59, 999).toISOString();
       return { start, end };
     }
     if (datePreset === 'YESTERDAY') {
-      const y = new Date(now);
-      y.setDate(y.getDate() - 1);
-      const start = new Date(y.getFullYear(), y.getMonth(), y.getDate()).toISOString();
-      const end = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23, 59, 59, 999).toISOString();
+      const yDate = new Date(y, m, d - 1);
+      const start = new Date(yDate.getFullYear(), yDate.getMonth(), yDate.getDate(), 0, 0, 0, 0).toISOString();
+      const end = new Date(yDate.getFullYear(), yDate.getMonth(), yDate.getDate(), 23, 59, 59, 999).toISOString();
       return { start, end };
     }
     if (datePreset === 'WEEK') {
-      const w = new Date(now);
-      w.setDate(w.getDate() - 7);
-      return { start: w.toISOString(), end: now.toISOString() };
+      const wStart = new Date(y, m, d - 7, 0, 0, 0, 0);
+      const wEnd = new Date(y, m, d, 23, 59, 59, 999);
+      return { start: wStart.toISOString(), end: wEnd.toISOString() };
     }
     if (datePreset === 'MONTH') {
-      const m = new Date(now);
-      m.setDate(m.getDate() - 30);
-      return { start: m.toISOString(), end: now.toISOString() };
+      const mStart = new Date(y, m, d - 30, 0, 0, 0, 0);
+      const mEnd = new Date(y, m, d, 23, 59, 59, 999);
+      return { start: mStart.toISOString(), end: mEnd.toISOString() };
     }
     return { start: '', end: '' }; // ALL TIME
   };
@@ -96,8 +94,15 @@ export default function Dashboard() {
       let url = '/api/dashboard';
       const params = new URLSearchParams();
       const { start, end } = getComputedDates();
-      if (start) params.append('startDate', start);
-      if (end) params.append('endDate', end);
+
+      if (datePreset === 'ALL') {
+        params.append('allTime', 'true');
+      } else {
+        if (start) params.append('startDate', start);
+        if (end) params.append('endDate', end);
+      }
+      if (workingDate) params.append('workingDate', workingDate);
+
       if (params.toString()) url += `?${params.toString()}`;
 
       const res = await fetch(url);
@@ -121,9 +126,6 @@ export default function Dashboard() {
     setStartDate('');
     setEndDate('');
   };
-
-  const nowObj = new Date();
-  const todayStr = `${nowObj.getFullYear()}-${String(nowObj.getMonth() + 1).padStart(2, '0')}-${String(nowObj.getDate()).padStart(2, '0')}`;
 
   if (loading) {
     return (

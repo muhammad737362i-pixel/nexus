@@ -7,17 +7,31 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
+    const workingDate = searchParams.get('workingDate');
+    const isAllTime = searchParams.get('allTime') === 'true';
 
     const txWhere: any = {};
-    if (startDate || endDate) {
-      txWhere.createdAt = {};
-      if (startDate) txWhere.createdAt.gte = new Date(startDate);
-      if (endDate) txWhere.createdAt.lte = new Date(endDate);
-    } else {
-      // Default: Today's transactions
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      txWhere.createdAt = { gte: todayStart };
+    if (!isAllTime) {
+      if (startDate || endDate) {
+        txWhere.createdAt = {};
+        if (startDate) txWhere.createdAt.gte = new Date(startDate);
+        if (endDate) txWhere.createdAt.lte = new Date(endDate);
+      } else if (workingDate) {
+        const parts = workingDate.split('-').map(Number);
+        const y = parts[0];
+        const m = parts[1] - 1;
+        const d = parts[2];
+        const start = new Date(y, m, d, 0, 0, 0, 0);
+        const end = new Date(y, m, d, 23, 59, 59, 999);
+        txWhere.createdAt = { gte: start, lte: end };
+      } else {
+        // Default: Today's transactions strictly between 00:00:00 and 23:59:59.999
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayEnd = new Date();
+        todayEnd.setHours(23, 59, 59, 999);
+        txWhere.createdAt = { gte: todayStart, lte: todayEnd };
+      }
     }
 
     // 1. Transactions in Date & Time Range
