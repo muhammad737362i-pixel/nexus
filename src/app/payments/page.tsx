@@ -761,6 +761,9 @@ export default function PaymentsPage() {
       {/* Print PDF Global Styles */}
       <style>{`
         @media print {
+          @page {
+            margin: 10mm;
+          }
           body * {
             visibility: hidden !important;
           }
@@ -776,7 +779,7 @@ export default function PaymentsPage() {
             color: #000000 !important;
             display: block !important;
             margin: 0 !important;
-            padding: 20px !important;
+            padding: 10px !important;
           }
         }
       `}</style>
@@ -828,12 +831,55 @@ export default function PaymentsPage() {
           </div>
         </div>
 
-        {/* Trade Transactions Table */}
-        {filteredTransactions.length > 0 && (
-          <div className="space-y-2 pt-2">
-            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider border-b border-slate-300 pb-1">
-              1. Executed Trade Orders History ({filteredTransactions.length})
-            </h3>
+        {/* FIRST TABLE: Settled Payments Receipts Log (Paid Amounts) */}
+        <div className="space-y-2 pt-2">
+          <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider border-b border-slate-300 pb-1">
+            1. Settled Payments Log ({filteredPayments.length})
+          </h3>
+          {filteredPayments.length === 0 ? (
+            <div className="py-4 text-center text-xs text-slate-500 italic border border-slate-200 rounded-lg">
+              No settled payment records found for this selection.
+            </div>
+          ) : (
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-100 text-slate-900 uppercase text-[10px] border-b border-slate-400">
+                  <th className="py-2 px-2">Receipt #</th>
+                  <th className="py-2 px-2">Date & Time</th>
+                  <th className="py-2 px-2">Party Name</th>
+                  <th className="py-2 px-2">Direction</th>
+                  <th className="py-2 px-2">Channel</th>
+                  <th className="py-2 px-2 text-right">Amount Paid</th>
+                  <th className="py-2 px-2">Reference / Notes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {filteredPayments.map((p: any) => (
+                  <tr key={p.id} className="text-[11px]">
+                    <td className="py-2 px-2 font-mono font-bold text-slate-900">{p.receiptNo}</td>
+                    <td className="py-2 px-2 text-slate-700">{new Date(p.createdAt).toLocaleString()}</td>
+                    <td className="py-2 px-2 font-bold text-slate-900">{p.party?.name}</td>
+                    <td className="py-2 px-2 font-bold">{p.type}</td>
+                    <td className="py-2 px-2">{p.paymentMethod}</td>
+                    <td className="py-2 px-2 text-right font-bold text-slate-900">${p.amount?.toLocaleString('en-US', { minimumFractionDigits: 2 })} {p.currencyCode}</td>
+                    <td className="py-2 px-2 text-slate-700">{p.referenceNo || p.notes || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* SECOND TABLE: Executed Trade Orders History */}
+        <div className="space-y-2 pt-4">
+          <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider border-b border-slate-300 pb-1">
+            2. Executed Trade Orders History ({filteredTransactions.length})
+          </h3>
+          {filteredTransactions.length === 0 ? (
+            <div className="py-4 text-center text-xs text-slate-500 italic border border-slate-200 rounded-lg">
+              No trade order records found for this selection.
+            </div>
+          ) : (
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-100 text-slate-900 uppercase text-[10px] border-b border-slate-400">
@@ -860,43 +906,8 @@ export default function PaymentsPage() {
                 ))}
               </tbody>
             </table>
-          </div>
-        )}
-
-        {/* Paid Payments Receipts Table */}
-        {filteredPayments.length > 0 && (
-          <div className="space-y-2 pt-4">
-            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider border-b border-slate-300 pb-1">
-              2. Settled Payments Log ({filteredPayments.length})
-            </h3>
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-slate-100 text-slate-900 uppercase text-[10px] border-b border-slate-400">
-                  <th className="py-2 px-2">Receipt #</th>
-                  <th className="py-2 px-2">Date & Time</th>
-                  <th className="py-2 px-2">Party Name</th>
-                  <th className="py-2 px-2">Direction</th>
-                  <th className="py-2 px-2">Channel</th>
-                  <th className="py-2 px-2 text-right">Amount</th>
-                  <th className="py-2 px-2">Reference / Notes</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {filteredPayments.map((p: any) => (
-                  <tr key={p.id} className="text-[11px]">
-                    <td className="py-2 px-2 font-mono font-bold text-slate-900">{p.receiptNo}</td>
-                    <td className="py-2 px-2 text-slate-700">{new Date(p.createdAt).toLocaleString()}</td>
-                    <td className="py-2 px-2 font-bold text-slate-900">{p.party?.name}</td>
-                    <td className="py-2 px-2 font-bold">{p.type}</td>
-                    <td className="py-2 px-2">{p.paymentMethod}</td>
-                    <td className="py-2 px-2 text-right font-bold text-slate-900">${p.amount?.toLocaleString('en-US', { minimumFractionDigits: 2 })} {p.currencyCode}</td>
-                    <td className="py-2 px-2 text-slate-700">{p.referenceNo || p.notes || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Footer */}
         <div className="pt-6 border-t border-slate-300 flex justify-between text-[10px] text-slate-500 font-mono">
