@@ -263,18 +263,71 @@ export default function PaymentsPage() {
       ? parties
       : parties.filter((p: any) => p.type === partyCategoryFilter);
 
-  // Active Selected Party Object & Stats for Banker/Customer Spotlight
-  const activePartyObj =
-    selectedPartyFilter !== 'ALL'
-      ? parties.find((p: any) => p.id === selectedPartyFilter)
-      : null;
+  // Default USD/USDT Rate for INR conversion if needed
+  const usdCurr = currencies.find((c: any) => c.code === 'USD' || c.code === 'USDT');
+  const usdtRate = usdCurr?.defaultBuyRate || 88;
 
-  const activePartyStats = activePartyObj ? partyStats[activePartyObj.id] : null;
+  // Filter trade transactions matching active filters for Expected Amount (USDT)
+  const filteredTransactions = transactions.filter((tx: any) => {
+    const matchesSearch =
+      searchTerm.trim() === '' ||
+      tx.receiptNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      tx.party?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (tx.notes && tx.notes.toLowerCase().includes(searchTerm.toLowerCase()));
 
-  // Filter party's buying transactions if a banker is selected
-  const activePartyBuyTrades = activePartyObj
-    ? transactions.filter((t: any) => t.partyId === activePartyObj.id)
-    : [];
+    const matchesCategory =
+      partyCategoryFilter === 'ALL' || tx.party?.type === partyCategoryFilter;
+
+    const matchesParty =
+      selectedPartyFilter === 'ALL' || tx.partyId === selectedPartyFilter;
+
+    let matchesDate = true;
+    if (datePreset !== 'ALL') {
+      const tDate = new Date(tx.createdAt);
+      const now = new Date();
+      if (datePreset === 'TODAY') {
+        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        matchesDate = tDate >= start;
+      } else if (datePreset === 'YESTERDAY') {
+        const yStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+        const yEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
+        matchesDate = tDate >= yStart && tDate <= yEnd;
+      } else if (datePreset === 'WEEK') {
+        const wStart = new Date(now);
+        wStart.setDate(wStart.getDate() - 7);
+        matchesDate = tDate >= wStart;
+      } else if (datePreset === 'MONTH') {
+        const mStart = new Date(now);
+        mStart.setDate(mStart.getDate() - 30);
+        matchesDate = tDate >= mStart;
+      } else if (datePreset === 'CUSTOM') {
+        if (startDate) {
+          const s = new Date(startDate);
+          matchesDate = matchesDate && tDate >= s;
+        }
+        if (endDate) {
+          const e = new Date(endDate);
+          e.setHours(23, 59, 59, 999);
+          matchesDate = matchesDate && tDate <= e;
+        }
+      }
+    }
+
+    return matchesSearch && matchesCategory && matchesParty && matchesDate;
+  });
+
+  // Calculate Filter-reactive Expected Amount (USDT)
+  const totalExpectedUSDT = filteredTransactions.reduce((acc: number, tx: any) => {
+    let vol = 0;
+    if (tx.toCurrency === 'USDT' || tx.toCurrency === 'USD') {
+      vol = tx.amountReceived;
+    } else if (tx.fromCurrency === 'USDT' || tx.fromCurrency === 'USD') {
+      vol = tx.amountGiven;
+    } else if (tx.appliedRate > 0) {
+      vol = tx.amountGiven / tx.appliedRate;
+    }
+    return acc + vol;
+  }, 0);
 
   // Filter payments list based on all filter parameters
   const filteredPayments = payments.filter((p: any) => {
@@ -355,6 +408,31 @@ export default function PaymentsPage() {
     );
   });
 
+  // Calculate Filter-reactive Paid Amount (USDT)
+  const totalPaidUSDT = filteredPayments.reduce((acc: number, p: any) => {
+    let amt = p.amount;
+    if (p.currencyCode === 'INR') {
+      amt = p.amount / usdtRate;
+    }
+    return acc + amt;
+  }, 0);
+
+  // Calculate Overall Pending Amount (USDT) - Always overall lifetime balance
+  let totalOverallPendingINR = 0;
+  if (selectedPartyFilter !== 'ALL') {
+    const pStat = partyStats[selectedPartyFilter];
+    totalOverallPendingINR = pStat ? pStat.pendingBalance : 0;
+  } else {
+    if (partyCategoryFilter === 'BANKER') {
+      totalOverallPendingINR = summary.totalPendingBankerOwed || 0;
+    } else if (partyCategoryFilter === 'CUSTOMER') {
+      totalOverallPendingINR = summary.totalPendingCustomerReceivable || 0;
+    } else {
+      totalOverallPendingINR = (summary.totalPendingBankerOwed || 0) + (summary.totalPendingCustomerReceivable || 0);
+    }
+  }
+  const totalOverallPendingUSDT = totalOverallPendingINR / usdtRate;
+
   return (
     <div className="w-full space-y-6">
       {/* Header & Quick Action Buttons */}
@@ -383,226 +461,62 @@ export default function PaymentsPage() {
         </div>
       </div>
 
-      {/* Financial Metrics Summary Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Metric 1: Received Today */}
-        <div className="glass-card rounded-2xl p-5 border border-emerald-500/30 relative overflow-hidden">
+      {/* 3 Core Financial Metric Cards (in USDT) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Metric 1: Expected Amount (USDT) */}
+        <div className="glass-card rounded-2xl p-5 border border-indigo-500/30 relative overflow-hidden bg-gradient-to-br from-indigo-950/40 via-slate-900 to-slate-900">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Payments Received Today</span>
-            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <ArrowDownLeft className="w-4 h-4" />
+            <span className="text-xs font-semibold text-indigo-300 uppercase tracking-wider">
+              Expected Amount (USDT)
+            </span>
+            <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+              <TrendingUp className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-emerald-400">
-            ${summary.todayReceived?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          <div className="text-2xl font-extrabold text-white">
+            ${totalExpectedUSDT.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
           </div>
-          <div className="mt-2 text-xs text-slate-400">Total collected from buyers</div>
+          <div className="mt-2 text-xs text-slate-400">
+            Expected trade volume within selected filters
+          </div>
         </div>
 
-        {/* Metric 2: Sent Today */}
-        <div className="glass-card rounded-2xl p-5 border border-amber-500/30 relative overflow-hidden">
+        {/* Metric 2: Paid Amount (USDT) */}
+        <div className="glass-card rounded-2xl p-5 border border-emerald-500/30 relative overflow-hidden bg-gradient-to-br from-emerald-950/30 via-slate-900 to-slate-900">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Payments Sent Today</span>
-            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
-              <ArrowUpRight className="w-4 h-4" />
+            <span className="text-xs font-semibold text-emerald-300 uppercase tracking-wider">
+              Paid Amount (USDT)
+            </span>
+            <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+              <CheckCircle2 className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-amber-400">
-            ${summary.todaySent?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          <div className="text-2xl font-extrabold text-emerald-400">
+            ${totalPaidUSDT.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
           </div>
-          <div className="mt-2 text-xs text-slate-400">Total paid to bankers / sellers</div>
+          <div className="mt-2 text-xs text-slate-400">
+            Total settled payments within selected filters
+          </div>
         </div>
 
-        {/* Metric 3: Net Cashflow Today */}
-        <div className="glass-card rounded-2xl p-5 border border-indigo-500/30 relative overflow-hidden bg-gradient-to-br from-indigo-950/40 to-slate-900/60">
+        {/* Metric 3: Overall Pending (USDT) */}
+        <div className="glass-card rounded-2xl p-5 border border-amber-500/40 relative overflow-hidden bg-gradient-to-br from-amber-950/30 via-slate-900 to-slate-900">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-indigo-300 uppercase tracking-wider">Today's Net Cashflow</span>
-            <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-              <CreditCard className="w-4 h-4" />
+            <span className="text-xs font-semibold text-amber-300 uppercase tracking-wider">
+              Overall Pending (USDT)
+            </span>
+            <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+              <Clock className="w-4 h-4" />
             </div>
           </div>
-          <div className={`text-2xl font-bold ${summary.netToday >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-            {summary.netToday >= 0 ? '+' : ''}${summary.netToday?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          <div className="text-2xl font-extrabold text-amber-400">
+            ${Math.abs(totalOverallPendingUSDT).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
           </div>
-          <div className="mt-2 text-xs text-indigo-300">Received minus Sent</div>
-        </div>
-
-        {/* Metric 4: Total Outstanding Banker Balance Owed */}
-        <div className="glass-card rounded-2xl p-5 border border-rose-500/40 relative overflow-hidden bg-gradient-to-br from-rose-950/30 to-slate-900/80">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-rose-300 uppercase tracking-wider">Total Banker Pending Owed</span>
-            <div className="p-2 rounded-xl bg-rose-500/20 text-rose-400 border border-rose-500/30">
-              <ShieldAlert className="w-4 h-4" />
-            </div>
+          <div className="mt-2 text-xs text-slate-400">
+            Overall total pending balance (Lifetime overall)
           </div>
-          <div className="text-2xl font-bold text-rose-400">
-            ₹{summary.totalPendingBankerOwed?.toLocaleString('en-US', { minimumFractionDigits: 2 }) || '0.00'}
-          </div>
-          <div className="mt-2 text-xs text-slate-400">Unsettled buy balances owed to bankers</div>
         </div>
       </div>
-
-      {/* BANKER & PARTY FINANCIAL INTELLIGENCE SPOTLIGHT CARD */}
-      {activePartyObj && activePartyStats && (
-        <div className="glass-card rounded-2xl p-6 border border-indigo-500/50 bg-gradient-to-br from-indigo-950/60 via-slate-900 to-slate-900/90 shadow-2xl space-y-5 animate-fadeIn">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-3 rounded-2xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/40 font-bold text-lg">
-                {activePartyObj.type === 'BANKER' ? <Building2 className="w-6 h-6" /> : <Users className="w-6 h-6" />}
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-bold text-white tracking-tight">{activePartyObj.name}</h2>
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] uppercase font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                    {activePartyObj.type === 'BANKER' ? 'Seller / Banker' : 'Buyer / Customer'}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  {activePartyObj.phone || activePartyObj.email || 'Financial Ledger & Trade History Summary'}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setSelectedPartyFilter('ALL')}
-                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
-              >
-                ✕ Close Spotlight
-              </button>
-              <button
-                onClick={() =>
-                  openNewPaymentModal(activePartyObj.type === 'BANKER' ? 'SENT' : 'RECEIVED', activePartyObj.id)
-                }
-                className={`px-4 py-2 rounded-xl text-white text-xs font-bold transition shadow-lg flex items-center gap-1.5 cursor-pointer ${
-                  activePartyObj.type === 'BANKER'
-                    ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-600/20'
-                    : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/20'
-                }`}
-              >
-                <PlusCircle className="w-4 h-4" />
-                {activePartyObj.type === 'BANKER' ? 'Pay Banker Now' : 'Receive Payment Now'}
-              </button>
-            </div>
-          </div>
-
-          {/* Banker Stats Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
-            {/* Stat 1: Total USDT Trade Volume */}
-            <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1">
-              <span className="text-slate-400 font-medium">
-                {activePartyObj.type === 'BANKER' ? 'Total Buying Volume (USDT)' : 'Total Selling Volume (USDT)'}
-              </span>
-              <div className="text-xl font-extrabold text-white">
-                {activePartyObj.type === 'BANKER'
-                  ? activePartyStats.totalBuyVolumeUSDT?.toLocaleString('en-US')
-                  : activePartyStats.totalSellVolumeUSDT?.toLocaleString('en-US')}{' '}
-                USDT
-              </div>
-              <span className="text-[10px] text-indigo-400 font-semibold">
-                {activePartyStats.tradeCount} Executed Orders
-              </span>
-            </div>
-
-            {/* Stat 2: Total Trade Billed Value (INR) */}
-            <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1">
-              <span className="text-slate-400 font-medium">
-                {activePartyObj.type === 'BANKER' ? 'Total Buy Billed (INR)' : 'Total Sell Billed (INR)'}
-              </span>
-              <div className="text-xl font-extrabold text-indigo-300">
-                ₹{activePartyObj.type === 'BANKER'
-                  ? activePartyStats.totalBuyBilledINR?.toLocaleString('en-US', { minimumFractionDigits: 2 })
-                  : activePartyStats.totalSellBilledINR?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-              </div>
-              <span className="text-[10px] text-slate-400">Calculated trade obligations</span>
-            </div>
-
-            {/* Stat 3: Total Paid / Settled */}
-            <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1">
-              <span className="text-slate-400 font-medium">
-                {activePartyObj.type === 'BANKER' ? 'Total Payments Sent (Paid)' : 'Total Payments Received'}
-              </span>
-              <div className="text-xl font-extrabold text-emerald-400">
-                ₹{activePartyObj.type === 'BANKER'
-                  ? activePartyStats.totalPaidSent?.toLocaleString('en-US', { minimumFractionDigits: 2 })
-                  : activePartyStats.totalPaidReceived?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-              </div>
-              <span className="text-[10px] text-emerald-400 font-semibold">
-                {activePartyStats.paymentCount} Payment Receipts
-              </span>
-            </div>
-
-            {/* Stat 4: Remaining Pending Balance */}
-            <div className={`p-4 rounded-xl border space-y-1 ${
-              activePartyStats.pendingBalance > 0
-                ? 'bg-rose-950/40 border-rose-500/40 text-rose-400'
-                : 'bg-emerald-950/40 border-emerald-500/40 text-emerald-400'
-            }`}>
-              <span className="text-slate-400 font-medium">
-                {activePartyObj.type === 'BANKER' ? 'Pending Owed to Banker' : 'Pending Receivable from Customer'}
-              </span>
-              <div className="text-xl font-extrabold">
-                ₹{Math.abs(activePartyStats.pendingBalance)?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-              </div>
-              <span className={`inline-block text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
-                activePartyStats.pendingBalance > 0
-                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                  : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-              }`}>
-                {activePartyStats.pendingBalance > 0 ? '⚠️ Unsettled Balance' : '✅ Fully Paid & Settled'}
-              </span>
-            </div>
-          </div>
-
-          {/* Banker Buying Trades History Preview */}
-          {activePartyBuyTrades.length > 0 && (
-            <div className="space-y-2.5 pt-2 border-t border-slate-800">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                  <TrendingUp className="w-4 h-4 text-indigo-400" /> Recent Trades for {activePartyObj.name} ({activePartyBuyTrades.length})
-                </h3>
-              </div>
-
-              <div className="overflow-x-auto rounded-xl border border-slate-800">
-                <table className="w-full text-left text-xs text-slate-300">
-                  <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
-                    <tr>
-                      <th className="py-2.5 px-3">Receipt #</th>
-                      <th className="py-2.5 px-3">Date</th>
-                      <th className="py-2.5 px-3">Type</th>
-                      <th className="py-2.5 px-3">Amount Given</th>
-                      <th className="py-2.5 px-3">Applied Rate</th>
-                      <th className="py-2.5 px-3">Amount Received</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/60 bg-slate-950/40">
-                    {activePartyBuyTrades.slice(0, 5).map((tx: any) => (
-                      <tr key={tx.id} className="hover:bg-slate-800/40 text-[11px]">
-                        <td className="py-2 px-3 font-mono font-bold text-indigo-400">{tx.receiptNo}</td>
-                        <td className="py-2 px-3 text-slate-400">{new Date(tx.createdAt).toLocaleDateString()}</td>
-                        <td className="py-2 px-3 font-bold">
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] ${
-                            tx.type === 'BUY' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
-                          }`}>
-                            {tx.type}
-                          </span>
-                        </td>
-                        <td className="py-2 px-3 font-bold text-white">
-                          {tx.amountGiven?.toLocaleString()} {tx.fromCurrency}
-                        </td>
-                        <td className="py-2 px-3 text-amber-300 font-mono font-bold">{tx.appliedRate}</td>
-                        <td className="py-2 px-3 font-bold text-emerald-400">
-                          {tx.amountReceived?.toLocaleString()} {tx.toCurrency}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* COMPREHENSIVE MULTI-FILTER CONTROL PANEL */}
       <div className="glass-card rounded-2xl p-5 border border-slate-800 space-y-4">
