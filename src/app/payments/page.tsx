@@ -60,6 +60,9 @@ export default function PaymentsPage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
+  // Table View Tab State: 'PAYMENTS' or 'TRADES'
+  const [activeTab, setActiveTab] = useState<'PAYMENTS' | 'TRADES'>('PAYMENTS');
+
   // Form State for Record Payment Modal
   const [paymentType, setPaymentType] = useState<'RECEIVED' | 'SENT'>('RECEIVED');
   const [partyId, setPartyId] = useState('');
@@ -735,142 +738,301 @@ export default function PaymentsPage() {
         </div>
       </div>
 
-      {/* Main Payments Table */}
+      {/* Print PDF Global Styles */}
+      <style>{`
+        @media print {
+          body {
+            background-color: #ffffff !important;
+            color: #000000 !important;
+          }
+          header, sidebar, nav, button, input, select, .no-print {
+            display: none !important;
+          }
+          .glass-card {
+            border: 1px solid #ccc !important;
+            background: #fff !important;
+            color: #000 !important;
+            box-shadow: none !important;
+          }
+          .text-white, .text-slate-300, .text-slate-400 {
+            color: #000 !important;
+          }
+          table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+          }
+          th, td {
+            border: 1px solid #ddd !important;
+            padding: 8px !important;
+            color: #000 !important;
+          }
+          th {
+            background-color: #f2f2f2 !important;
+          }
+        }
+      `}</style>
+
+      {/* Main Container: Payments & Trade History Tables */}
       <div className="glass-card rounded-2xl p-6 border border-slate-800 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold text-white flex items-center gap-2">
-            <Receipt className="w-4 h-4 text-indigo-400" /> Payment Receipts Audit Log ({filteredPayments.length})
-          </h2>
-          <span className="text-xs text-slate-400">
-            Showing matching entries
-          </span>
+        {/* Table View Tab Header & PDF Button */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+          {/* Tab Switcher */}
+          <div className="flex items-center gap-2 bg-slate-900/90 p-1.5 rounded-xl border border-slate-800">
+            <button
+              onClick={() => setActiveTab('PAYMENTS')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+                activeTab === 'PAYMENTS'
+                  ? 'bg-emerald-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <Receipt className="w-4 h-4" /> Paid Payments Log ({filteredPayments.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('TRADES')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+                activeTab === 'TRADES'
+                  ? 'bg-indigo-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <TrendingUp className="w-4 h-4" /> Trade History / Orders ({filteredTransactions.length})
+            </button>
+          </div>
+
+          {/* PDF Download Button */}
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow-md cursor-pointer border border-indigo-500/30"
+          >
+            <Printer className="w-4 h-4" /> Download PDF Report
+          </button>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-300">
-            <thead className="bg-slate-900/80 text-slate-400 uppercase text-[11px] tracking-wider border-b border-slate-800">
-              <tr>
-                <th className="py-3 px-4">Receipt #</th>
-                <th className="py-3 px-4">Date & Time</th>
-                <th className="py-3 px-4">Party Name</th>
-                <th className="py-3 px-4">Direction</th>
-                <th className="py-3 px-4">Channel / Method</th>
-                <th className="py-3 px-4 text-right">Amount</th>
-                <th className="py-3 px-4">Ref # / Notes</th>
-                <th className="py-3 px-4 text-center">Receipt</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {filteredPayments.length === 0 ? (
+        {/* TAB 1: PAYMENT RECEIPTS LOG */}
+        {activeTab === 'PAYMENTS' && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-slate-300">
+              <thead className="bg-slate-900/80 text-slate-400 uppercase text-[11px] tracking-wider border-b border-slate-800">
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-xs text-slate-500">
-                    <div className="space-y-2">
-                      <Banknote className="w-8 h-8 mx-auto text-slate-600" />
-                      <p className="font-semibold text-slate-400">No payment records match your filters.</p>
-                      {hasActiveFilters && (
-                        <button
-                          onClick={resetAllFilters}
-                          className="text-xs text-indigo-400 hover:text-indigo-300 font-bold underline"
-                        >
-                          Reset all search filters
-                        </button>
-                      )}
-                    </div>
-                  </td>
+                  <th className="py-3 px-4">Receipt #</th>
+                  <th className="py-3 px-4">Date & Time</th>
+                  <th className="py-3 px-4">Party Name</th>
+                  <th className="py-3 px-4">Direction</th>
+                  <th className="py-3 px-4">Channel / Method</th>
+                  <th className="py-3 px-4 text-right">Amount</th>
+                  <th className="py-3 px-4">Ref # / Notes</th>
+                  <th className="py-3 px-4 text-center no-print">Actions</th>
                 </tr>
-              ) : (
-                filteredPayments.map((p: any) => {
-                  const isReceived = p.type === 'RECEIVED';
-                  const isCustomer = p.party?.type === 'CUSTOMER';
-                  const pStats = partyLifetimeStats[p.partyId];
+              </thead>
+              <tbody className="divide-y divide-slate-800/60">
+                {filteredPayments.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-12 text-center text-xs text-slate-500">
+                      <div className="space-y-2">
+                        <Banknote className="w-8 h-8 mx-auto text-slate-600" />
+                        <p className="font-semibold text-slate-400">No payment records match your filters.</p>
+                        {hasActiveFilters && (
+                          <button
+                            onClick={resetAllFilters}
+                            className="text-xs text-indigo-400 hover:text-indigo-300 font-bold underline no-print"
+                          >
+                            Reset all search filters
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredPayments.map((p: any) => {
+                    const isReceived = p.type === 'RECEIVED';
+                    const isCustomer = p.party?.type === 'CUSTOMER';
+                    const pStats = partyLifetimeStats[p.partyId];
 
-                  return (
-                    <tr key={p.id} className="hover:bg-slate-800/40 transition text-xs">
-                      <td className="py-3.5 px-4 font-mono font-bold text-white flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                        {p.receiptNo}
-                      </td>
-                      <td className="py-3.5 px-4 text-slate-400 font-mono">
-                        {new Date(p.createdAt).toLocaleString()}
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <div
-                          onClick={() => setSelectedPartyFilter(p.partyId)}
-                          className="font-bold text-white flex items-center gap-1.5 cursor-pointer hover:text-indigo-400 transition"
-                          title="Click to filter by this party"
-                        >
-                          {isCustomer ? (
-                            <Users className="w-3.5 h-3.5 text-emerald-400" />
-                          ) : (
-                            <Building2 className="w-3.5 h-3.5 text-indigo-400" />
+                    return (
+                      <tr key={p.id} className="hover:bg-slate-800/40 transition text-xs">
+                        <td className="py-3.5 px-4 font-mono font-bold text-white flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse no-print" />
+                          {p.receiptNo}
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-400 font-mono">
+                          {new Date(p.createdAt).toLocaleString()}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div
+                            onClick={() => setSelectedPartyFilter(p.partyId)}
+                            className="font-bold text-white flex items-center gap-1.5 cursor-pointer hover:text-indigo-400 transition"
+                            title="Click to filter by this party"
+                          >
+                            {isCustomer ? (
+                              <Users className="w-3.5 h-3.5 text-emerald-400" />
+                            ) : (
+                              <Building2 className="w-3.5 h-3.5 text-indigo-400" />
+                            )}
+                            <span>{p.party?.name}</span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[10px] text-slate-400 uppercase font-semibold">
+                              {isCustomer ? 'Buyer / Customer' : 'Seller / Banker'}
+                            </span>
+                            {pStats && pStats.pendingUSDT > 0 && (
+                              <span className="text-[9px] font-bold text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded">
+                                Owed: ${pStats.pendingUSDT.toLocaleString('en-US', { minimumFractionDigits: 2 })} USDT
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold ${
+                              isReceived
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                            }`}
+                          >
+                            {isReceived ? <ArrowDownLeft className="w-3 h-3" /> : <ArrowUpRight className="w-3 h-3" />}
+                            {isReceived ? 'RECEIVED (IN)' : 'SENT (OUT)'}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 font-medium text-slate-300">
+                          {p.paymentMethod === 'BANK' && '🏛️ Bank Transfer'}
+                          {p.paymentMethod === 'CASH' && '💵 Cash Safe'}
+                          {p.paymentMethod === 'ONLINE' && '⚡ Online Payment'}
+                          {p.paymentMethod === 'CHEQUE' && '📝 Bank Cheque'}
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-extrabold text-white text-sm">
+                          <span className={isReceived ? 'text-emerald-400' : 'text-amber-400'}>
+                            {isReceived ? '+' : '-'}${p.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}{' '}
+                            {p.currencyCode}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-400">
+                          {p.referenceNo && (
+                            <span className="block font-mono text-[10px] text-slate-300">Ref: {p.referenceNo}</span>
                           )}
-                          <span>{p.party?.name}</span>
-                        </div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[10px] text-slate-400 uppercase font-semibold">
+                          <span className="italic text-[11px]">{p.notes || '—'}</span>
+                        </td>
+                        <td className="py-3.5 px-4 text-center no-print">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => setSelectedReceipt(p)}
+                              className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white font-medium text-[11px] transition cursor-pointer flex items-center gap-1"
+                            >
+                              <Receipt className="w-3 h-3" /> Voucher
+                            </button>
+                            <button
+                              onClick={() => setEditingPayment({ ...p, createdAt: toLocalISOString(p.createdAt) })}
+                              title="Edit or Delete payment entry"
+                              className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 transition cursor-pointer"
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* TAB 2: EXECUTED TRADE HISTORY */}
+        {activeTab === 'TRADES' && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-slate-300">
+              <thead className="bg-slate-900/80 text-slate-400 uppercase text-[11px] tracking-wider border-b border-slate-800">
+                <tr>
+                  <th className="py-3 px-4">Receipt #</th>
+                  <th className="py-3 px-4">Date & Time</th>
+                  <th className="py-3 px-4">Party Name</th>
+                  <th className="py-3 px-4">Trade Type</th>
+                  <th className="py-3 px-4 text-right">Amount Given</th>
+                  <th className="py-3 px-4 text-right">Applied Rate</th>
+                  <th className="py-3 px-4 text-right">Amount Received</th>
+                  <th className="py-3 px-4">Notes / Remarks</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60">
+                {filteredTransactions.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-12 text-center text-xs text-slate-500">
+                      <div className="space-y-2">
+                        <TrendingUp className="w-8 h-8 mx-auto text-slate-600" />
+                        <p className="font-semibold text-slate-400">No trade records match your filters.</p>
+                        {hasActiveFilters && (
+                          <button
+                            onClick={resetAllFilters}
+                            className="text-xs text-indigo-400 hover:text-indigo-300 font-bold underline no-print"
+                          >
+                            Reset all search filters
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredTransactions.map((tx: any) => {
+                    const isBuy = tx.type === 'BUY';
+                    const isCustomer = tx.party?.type === 'CUSTOMER';
+
+                    return (
+                      <tr key={tx.id} className="hover:bg-slate-800/40 transition text-xs">
+                        <td className="py-3.5 px-4 font-mono font-bold text-indigo-400">
+                          {tx.receiptNo}
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-400 font-mono">
+                          {new Date(tx.createdAt).toLocaleString()}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div
+                            onClick={() => setSelectedPartyFilter(tx.partyId)}
+                            className="font-bold text-white flex items-center gap-1.5 cursor-pointer hover:text-indigo-400 transition"
+                            title="Click to filter by this party"
+                          >
+                            {isCustomer ? (
+                              <Users className="w-3.5 h-3.5 text-emerald-400" />
+                            ) : (
+                              <Building2 className="w-3.5 h-3.5 text-indigo-400" />
+                            )}
+                            <span>{tx.party?.name}</span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 uppercase font-semibold block mt-0.5">
                             {isCustomer ? 'Buyer / Customer' : 'Seller / Banker'}
                           </span>
-                          {pStats && pStats.pendingUSDT > 0 && (
-                            <span className="text-[9px] font-bold text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded">
-                              Owed: ${pStats.pendingUSDT.toLocaleString('en-US', { minimumFractionDigits: 2 })} USDT
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold ${
-                            isReceived
-                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                              : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                          }`}
-                        >
-                          {isReceived ? <ArrowDownLeft className="w-3 h-3" /> : <ArrowUpRight className="w-3 h-3" />}
-                          {isReceived ? 'RECEIVED (IN)' : 'SENT (OUT)'}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 font-medium text-slate-300">
-                        {p.paymentMethod === 'BANK' && '🏛️ Bank Transfer'}
-                        {p.paymentMethod === 'CASH' && '💵 Cash Safe'}
-                        {p.paymentMethod === 'ONLINE' && '⚡ Online Payment'}
-                        {p.paymentMethod === 'CHEQUE' && '📝 Bank Cheque'}
-                      </td>
-                      <td className="py-3.5 px-4 text-right font-extrabold text-white text-sm">
-                        <span className={isReceived ? 'text-emerald-400' : 'text-amber-400'}>
-                          {isReceived ? '+' : '-'}${p.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}{' '}
-                          {p.currencyCode}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-slate-400">
-                        {p.referenceNo && (
-                          <span className="block font-mono text-[10px] text-slate-300">Ref: {p.referenceNo}</span>
-                        )}
-                        <span className="italic text-[11px]">{p.notes || '—'}</span>
-                      </td>
-                      <td className="py-3.5 px-4 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => setSelectedReceipt(p)}
-                            className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white font-medium text-[11px] transition cursor-pointer flex items-center gap-1"
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold ${
+                              isBuy
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                            }`}
                           >
-                            <Receipt className="w-3 h-3" /> Voucher
-                          </button>
-                          <button
-                            onClick={() => setEditingPayment({ ...p, createdAt: toLocalISOString(p.createdAt) })}
-                            title="Edit or Delete payment entry"
-                            className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 transition cursor-pointer"
-                          >
-                            <MoreVertical className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                            {isBuy ? 'BUY (FROM BANKER)' : 'SELL (TO CUSTOMER)'}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-extrabold text-white">
+                          {tx.amountGiven?.toLocaleString('en-US', { minimumFractionDigits: 2 })} {tx.fromCurrency}
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono font-bold text-amber-300">
+                          {tx.appliedRate}
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-extrabold text-emerald-400 text-sm">
+                          {tx.amountReceived?.toLocaleString('en-US', { minimumFractionDigits: 2 })} {tx.toCurrency}
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-400 italic">
+                          {tx.notes || '—'}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Record Payment Modal */}
