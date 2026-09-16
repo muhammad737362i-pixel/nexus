@@ -317,17 +317,21 @@ export default function PaymentsPage() {
   });
 
   // Calculate Filter-reactive Expected Amount (USDT)
-  const totalExpectedUSDT = filteredTransactions.reduce((acc: number, tx: any) => {
-    let vol = 0;
-    if (tx.toCurrency === 'USDT' || tx.toCurrency === 'USD') {
-      vol = tx.amountReceived;
-    } else if (tx.fromCurrency === 'USDT' || tx.fromCurrency === 'USD') {
-      vol = tx.amountGiven;
-    } else if (tx.appliedRate > 0) {
-      vol = tx.amountGiven / tx.appliedRate;
-    }
-    return acc + vol;
-  }, 0);
+  // Show 0 ($0.00 USDT) when no specific banker or customer is selected
+  const totalExpectedUSDT =
+    selectedPartyFilter === 'ALL' && searchTerm.trim() === ''
+      ? 0
+      : filteredTransactions.reduce((acc: number, tx: any) => {
+          let vol = 0;
+          if (tx.toCurrency === 'USDT' || tx.toCurrency === 'USD') {
+            vol = tx.amountReceived;
+          } else if (tx.fromCurrency === 'USDT' || tx.fromCurrency === 'USD') {
+            vol = tx.amountGiven;
+          } else if (tx.appliedRate > 0) {
+            vol = tx.amountGiven / tx.appliedRate;
+          }
+          return acc + vol;
+        }, 0);
 
   // Filter payments list based on all filter parameters
   const filteredPayments = payments.filter((p: any) => {
