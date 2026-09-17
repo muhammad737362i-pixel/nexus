@@ -14,8 +14,24 @@ export async function GET(req: Request) {
     if (!isAllTime) {
       if (startDate || endDate) {
         txWhere.createdAt = {};
-        if (startDate) txWhere.createdAt.gte = new Date(startDate);
-        if (endDate) txWhere.createdAt.lte = new Date(endDate);
+        if (startDate) {
+          if (startDate.length <= 10) {
+            const [y, m, d] = startDate.split('-').map(Number);
+            txWhere.createdAt.gte = new Date(y, m - 1, d, 0, 0, 0, 0);
+          } else {
+            txWhere.createdAt.gte = new Date(startDate);
+          }
+        }
+        if (endDate) {
+          if (endDate.length <= 10) {
+            const [y, m, d] = endDate.split('-').map(Number);
+            txWhere.createdAt.lte = new Date(y, m - 1, d, 23, 59, 59, 999);
+          } else {
+            const e = new Date(endDate);
+            if (!isNaN(e.getTime())) e.setHours(23, 59, 59, 999);
+            txWhere.createdAt.lte = e;
+          }
+        }
       } else if (workingDate) {
         const parts = workingDate.split('-').map(Number);
         const y = parts[0];
