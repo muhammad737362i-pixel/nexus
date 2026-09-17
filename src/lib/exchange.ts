@@ -142,7 +142,8 @@ export async function processBuyTransaction(params: {
   const totalProfit = calculateTradeProfit('BUY', amountGiven, appliedRate, fee, marketBuyRate, inrCurrency?.defaultSellRate || appliedRate);
 
   const receiptNo = await generateReceiptNo();
-  const txDate = createdAt ? new Date(createdAt) : undefined;
+  const rawDate = createdAt ? new Date(createdAt) : undefined;
+  const txDate = (rawDate && !isNaN(rawDate.getTime())) ? rawDate : undefined;
 
   return await prisma.$transaction(async (tx: any) => {
     const transaction = await tx.transaction.create({
@@ -232,7 +233,8 @@ export async function processSellTransaction(params: {
   const totalProfit = calculateTradeProfit('SELL', amountGiven, appliedRate, fee, inrCurrency?.defaultBuyRate || appliedRate, marketSellRate);
 
   const receiptNo = await generateReceiptNo();
-  const txDate = createdAt ? new Date(createdAt) : undefined;
+  const rawDate = createdAt ? new Date(createdAt) : undefined;
+  const txDate = (rawDate && !isNaN(rawDate.getTime())) ? rawDate : undefined;
 
   return await prisma.$transaction(async (tx: any) => {
     const transaction = await tx.transaction.create({

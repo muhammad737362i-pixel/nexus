@@ -183,7 +183,8 @@ export async function POST(req: Request) {
 
     const receiptNo = await generatePaymentReceiptNo();
     const numericAmount = Number(amount);
-    const payDate = createdAt ? new Date(createdAt) : undefined;
+    const rawDate = createdAt ? new Date(createdAt) : undefined;
+    const payDate = (rawDate && !isNaN(rawDate.getTime())) ? rawDate : undefined;
 
     const result = await prisma.$transaction(async (tx: any) => {
       // 1. Create Payment Record
@@ -260,6 +261,7 @@ export async function POST(req: Request) {
           amount: numericAmount,
           balanceAfter: numericAmount,
           notes: ledgerNotes,
+          ...(payDate ? { createdAt: payDate } : {}),
         },
       });
 
@@ -403,6 +405,9 @@ export async function PUT(req: Request) {
         },
       });
 
+      const rawDate = createdAt ? new Date(createdAt) : undefined;
+      const validCreatedAt = (rawDate && !isNaN(rawDate.getTime())) ? rawDate : undefined;
+
       // 3. Update Record
       return await tx.payment.update({
         where: { id },
@@ -414,7 +419,7 @@ export async function PUT(req: Request) {
           paymentMethod: newMethod,
           referenceNo: referenceNo !== undefined ? referenceNo : oldPayment.referenceNo,
           notes: notes !== undefined ? notes : oldPayment.notes,
-          ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
+          ...(validCreatedAt ? { createdAt: validCreatedAt } : {}),
         },
         include: { party: true },
       });

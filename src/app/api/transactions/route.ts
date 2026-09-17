@@ -265,6 +265,9 @@ export async function PUT(req: Request) {
       marketSellRate
     );
 
+    const rawDate = createdAt ? new Date(createdAt) : undefined;
+    const validCreatedAt = (rawDate && !isNaN(rawDate.getTime())) ? rawDate : undefined;
+
     const updatedTx = await prisma.transaction.update({
       where: { id },
       data: {
@@ -277,12 +280,19 @@ export async function PUT(req: Request) {
         totalProfit,
         paymentMethod: paymentMethod || tx.paymentMethod,
         notes: notes !== undefined ? notes : tx.notes,
-        ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
+        ...(validCreatedAt ? { createdAt: validCreatedAt } : {}),
       },
       include: {
         party: true,
       },
     });
+
+    if (validCreatedAt) {
+      await prisma.ledgerEntry.updateMany({
+        where: { transactionId: id },
+        data: { createdAt: validCreatedAt },
+      });
+    }
 
     return NextResponse.json({ success: true, transaction: updatedTx });
   } catch (error: any) {

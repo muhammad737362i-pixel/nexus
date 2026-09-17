@@ -126,6 +126,7 @@ export default function SellingPage() {
       if (json.success) {
         setSuccessReceipt(json.transaction);
         setAmountGiven('');
+        setCustomDateTime(getWorkingDateTimeISO());
       } else {
         setErrorMsg(json.error || 'Failed to execute sell transaction');
       }
