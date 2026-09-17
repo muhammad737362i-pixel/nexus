@@ -1196,8 +1196,8 @@ export default function PaymentsPage() {
 
       {/* Record Payment Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
-          <div className="glass-card rounded-2xl w-full max-w-lg p-6 border border-slate-800 shadow-2xl relative space-y-5 bg-slate-900">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn overflow-y-auto">
+          <div className="glass-card rounded-2xl w-full max-w-lg p-6 border border-slate-800 shadow-2xl relative space-y-5 bg-slate-900 max-h-[90vh] overflow-y-auto my-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-4">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Banknote className="w-5 h-5 text-emerald-400" /> Record Buyer / Seller Payment
@@ -1398,8 +1398,8 @@ export default function PaymentsPage() {
 
       {/* Payment Receipt Voucher Modal */}
       {selectedReceipt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fadeIn">
-          <div className="glass-card rounded-2xl w-full max-w-md p-6 border border-slate-800 shadow-2xl relative space-y-4 bg-slate-900">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fadeIn overflow-y-auto">
+          <div className="glass-card rounded-2xl w-full max-w-md p-6 border border-slate-800 shadow-2xl relative space-y-4 bg-slate-900 max-h-[90vh] overflow-y-auto my-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <Receipt className="w-5 h-5 text-indigo-400" />
@@ -1471,8 +1471,8 @@ export default function PaymentsPage() {
 
       {/* Edit Payment Modal */}
       {editingPayment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
-          <div className="glass-card rounded-2xl w-full max-w-lg p-6 border border-slate-800 shadow-2xl relative space-y-5 bg-slate-900">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn overflow-y-auto">
+          <div className="glass-card rounded-2xl w-full max-w-lg p-6 border border-slate-800 shadow-2xl relative space-y-5 bg-slate-900 max-h-[90vh] overflow-y-auto my-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-4">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Edit2 className="w-5 h-5 text-emerald-400" /> Edit Payment Entry ({editingPayment.receiptNo})

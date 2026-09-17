@@ -257,8 +257,8 @@ export default function CustomersPage() {
 
       {/* Add Customer Modal */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-card rounded-2xl p-6 border border-slate-800 w-full max-w-md space-y-4 animate-fadeIn">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="glass-card rounded-2xl p-6 border border-slate-800 w-full max-w-md space-y-4 animate-fadeIn max-h-[90vh] overflow-y-auto my-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="font-bold text-lg text-white">Add New Customer</h3>
               <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">
@@ -334,8 +334,8 @@ export default function CustomersPage() {
 
       {/* Edit Customer Modal */}
       {editingCustomer && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-card rounded-2xl p-6 border border-slate-800 w-full max-w-md space-y-4 animate-fadeIn">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="glass-card rounded-2xl p-6 border border-slate-800 w-full max-w-md space-y-4 animate-fadeIn max-h-[90vh] overflow-y-auto my-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="font-bold text-lg text-white">Edit Customer Details</h3>
               <button onClick={() => setEditingCustomer(null)} className="text-slate-400 hover:text-white cursor-pointer">

@@ -656,8 +656,8 @@ const toLocalISOString = (dateStr?: string) => {
 
       {/* Printable Receipt Modal */}
       {activeReceipt && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-card rounded-2xl p-6 border border-slate-700 w-full max-w-md space-y-6 animate-fadeIn bg-slate-900 text-white">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="glass-card rounded-2xl p-6 border border-slate-700 w-full max-w-md space-y-6 animate-fadeIn bg-slate-900 text-white max-h-[90vh] overflow-y-auto my-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <Receipt className="w-5 h-5 text-indigo-400" />
@@ -727,8 +727,8 @@ const toLocalISOString = (dateStr?: string) => {
 
       {/* Edit & Delete Transaction Modal */}
       {editingTx && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-card rounded-2xl p-6 border border-slate-700 w-full max-w-lg space-y-5 animate-fadeIn bg-slate-900 text-white">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="glass-card rounded-2xl p-6 border border-slate-700 w-full max-w-lg space-y-5 animate-fadeIn bg-slate-900 text-white max-h-[90vh] overflow-y-auto my-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <SlidersHorizontal className="w-5 h-5 text-amber-400" />
