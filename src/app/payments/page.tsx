@@ -297,6 +297,18 @@ export default function PaymentsPage() {
     return 0;
   };
 
+  // Helper: calculate total INR trade volume for a transaction
+  const getTxInrVolume = (tx: any) => {
+    if (tx.amountGiven && (tx.fromCurrency === 'INR' || tx.toCurrency === 'INR')) {
+      return tx.amountGiven;
+    } else if (tx.amountReceived && (tx.toCurrency === 'INR' || tx.fromCurrency === 'INR')) {
+      return tx.amountReceived;
+    } else if (tx.appliedRate > 0) {
+      return getTxUsdtVolume(tx) * tx.appliedRate;
+    }
+    return 0;
+  };
+
   // Helper: calculate total USDT amount for a payment record
   const getPayUsdtAmount = (p: any) => {
     let amt = p.amount || 0;
@@ -405,6 +417,13 @@ export default function PaymentsPage() {
     ? 0
     : filteredTransactions.reduce((acc: number, tx: any) => {
         return acc + getTxUsdtVolume(tx);
+      }, 0);
+
+  // Calculate Filter-reactive Expected Amount (INR)
+  const totalExpectedINR = !hasSpecificSelection
+    ? 0
+    : filteredTransactions.reduce((acc: number, tx: any) => {
+        return acc + getTxInrVolume(tx);
       }, 0);
 
   // Filter payments list based on all filter parameters
@@ -544,8 +563,8 @@ export default function PaymentsPage() {
         </div>
       </div>
 
-      {/* 3 Core Financial Metric Cards (in USDT) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* 4 Core Financial Metric Cards (Expected USDT, Expected INR, Paid USDT, Overall Pending) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Metric 1: Expected Amount (USDT) */}
         <div className="glass-card rounded-2xl p-5 border border-indigo-500/30 relative overflow-hidden bg-gradient-to-br from-indigo-950/40 via-slate-900 to-slate-900">
           <div className="flex items-center justify-between mb-2">
@@ -564,7 +583,25 @@ export default function PaymentsPage() {
           </div>
         </div>
 
-        {/* Metric 2: Paid Amount (USDT) */}
+        {/* Metric 2: Expected Amount (INR) */}
+        <div className="glass-card rounded-2xl p-5 border border-sky-500/30 relative overflow-hidden bg-gradient-to-br from-sky-950/40 via-slate-900 to-slate-900">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-sky-300 uppercase tracking-wider">
+              Expected Amount (INR)
+            </span>
+            <div className="p-2 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/30">
+              <DollarSign className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-2xl font-extrabold text-sky-300">
+            ₹{totalExpectedINR.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} INR
+          </div>
+          <div className="mt-2 text-xs text-slate-400">
+            Total expected billed INR at applied rate
+          </div>
+        </div>
+
+        {/* Metric 3: Paid Amount (USDT) */}
         <div className="glass-card rounded-2xl p-5 border border-emerald-500/30 relative overflow-hidden bg-gradient-to-br from-emerald-950/30 via-slate-900 to-slate-900">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-emerald-300 uppercase tracking-wider">
@@ -582,7 +619,7 @@ export default function PaymentsPage() {
           </div>
         </div>
 
-        {/* Metric 3: Overall Pending (USDT) */}
+        {/* Metric 4: Overall Pending (USDT) */}
         <div className="glass-card rounded-2xl p-5 border border-amber-500/40 relative overflow-hidden bg-gradient-to-br from-amber-950/30 via-slate-900 to-slate-900">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-amber-300 uppercase tracking-wider">
@@ -836,25 +873,32 @@ export default function PaymentsPage() {
           </div>
         </div>
 
-        {/* 3 Main Metric Boxes (Expected, Paid, Pending) */}
-        <div className="grid grid-cols-3 gap-4 text-center my-4">
-          <div className="p-4 border border-slate-300 rounded-xl bg-slate-50">
-            <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Expected Amount (USDT)</div>
-            <div className="text-xl font-extrabold text-slate-900 mt-1">
+        {/* 4 Main Metric Boxes (Expected USDT, Expected INR, Paid USDT, Overall Pending) */}
+        <div className="grid grid-cols-4 gap-3 text-center my-4">
+          <div className="p-3 border border-indigo-300 rounded-xl bg-indigo-50">
+            <div className="text-[10px] font-bold text-indigo-900 uppercase tracking-wider">Expected Amount (USDT)</div>
+            <div className="text-base font-extrabold text-indigo-950 mt-1">
               ${totalExpectedUSDT.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
             </div>
           </div>
 
-          <div className="p-4 border border-emerald-300 rounded-xl bg-emerald-50">
-            <div className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Paid Amount (USDT)</div>
-            <div className="text-xl font-extrabold text-emerald-900 mt-1">
+          <div className="p-3 border border-sky-300 rounded-xl bg-sky-50">
+            <div className="text-[10px] font-bold text-sky-900 uppercase tracking-wider">Expected Amount (INR)</div>
+            <div className="text-base font-extrabold text-sky-950 mt-1">
+              ₹{totalExpectedINR.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} INR
+            </div>
+          </div>
+
+          <div className="p-3 border border-emerald-300 rounded-xl bg-emerald-50">
+            <div className="text-[10px] font-bold text-emerald-900 uppercase tracking-wider">Paid Amount (USDT)</div>
+            <div className="text-base font-extrabold text-emerald-950 mt-1">
               ${totalPaidUSDT.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
             </div>
           </div>
 
-          <div className="p-4 border border-amber-300 rounded-xl bg-amber-50">
-            <div className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Overall Pending (USDT)</div>
-            <div className="text-xl font-extrabold text-amber-900 mt-1">
+          <div className="p-3 border border-amber-300 rounded-xl bg-amber-50">
+            <div className="text-[10px] font-bold text-amber-900 uppercase tracking-wider">Overall Pending (USDT)</div>
+            <div className="text-base font-extrabold text-amber-950 mt-1">
               ${Math.abs(totalOverallPendingUSDT).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
             </div>
           </div>
