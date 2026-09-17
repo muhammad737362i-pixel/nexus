@@ -359,28 +359,39 @@ export default function PaymentsPage() {
           const tDate = new Date(tx.createdAt);
           const now = new Date();
           if (datePreset === 'TODAY') {
-            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            matchesDate = tDate >= start;
+            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+            const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+            matchesDate = tDate >= start && tDate <= end;
           } else if (datePreset === 'YESTERDAY') {
-            const yStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+            const yStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0);
             const yEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
             matchesDate = tDate >= yStart && tDate <= yEnd;
           } else if (datePreset === 'WEEK') {
-            const wStart = new Date(now);
-            wStart.setDate(wStart.getDate() - 7);
+            const wStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0, 0);
             matchesDate = tDate >= wStart;
           } else if (datePreset === 'MONTH') {
-            const mStart = new Date(now);
-            mStart.setDate(mStart.getDate() - 30);
+            const mStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30, 0, 0, 0, 0);
             matchesDate = tDate >= mStart;
           } else if (datePreset === 'CUSTOM') {
             if (startDate) {
-              const s = new Date(startDate);
+              let s: Date;
+              if (startDate.length <= 10) {
+                const [y, m, d] = startDate.split('-').map(Number);
+                s = new Date(y, m - 1, d, 0, 0, 0, 0);
+              } else {
+                s = new Date(startDate);
+              }
               matchesDate = matchesDate && tDate >= s;
             }
             if (endDate) {
-              const e = new Date(endDate);
-              e.setHours(23, 59, 59, 999);
+              let e: Date;
+              if (endDate.length <= 10) {
+                const [y, m, d] = endDate.split('-').map(Number);
+                e = new Date(y, m - 1, d, 23, 59, 59, 999);
+              } else {
+                e = new Date(endDate);
+                e.setHours(23, 59, 59, 999);
+              }
               matchesDate = matchesDate && tDate <= e;
             }
           }
@@ -432,28 +443,39 @@ export default function PaymentsPage() {
           const pDate = new Date(p.createdAt);
           const now = new Date();
           if (datePreset === 'TODAY') {
-            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            matchesDate = pDate >= start;
+            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+            const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+            matchesDate = pDate >= start && pDate <= end;
           } else if (datePreset === 'YESTERDAY') {
-            const yStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+            const yStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0);
             const yEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
             matchesDate = pDate >= yStart && pDate <= yEnd;
           } else if (datePreset === 'WEEK') {
-            const wStart = new Date(now);
-            wStart.setDate(wStart.getDate() - 7);
+            const wStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0, 0);
             matchesDate = pDate >= wStart;
           } else if (datePreset === 'MONTH') {
-            const mStart = new Date(now);
-            mStart.setDate(mStart.getDate() - 30);
+            const mStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30, 0, 0, 0, 0);
             matchesDate = pDate >= mStart;
           } else if (datePreset === 'CUSTOM') {
             if (startDate) {
-              const s = new Date(startDate);
+              let s: Date;
+              if (startDate.length <= 10) {
+                const [y, m, d] = startDate.split('-').map(Number);
+                s = new Date(y, m - 1, d, 0, 0, 0, 0);
+              } else {
+                s = new Date(startDate);
+              }
               matchesDate = matchesDate && pDate >= s;
             }
             if (endDate) {
-              const e = new Date(endDate);
-              e.setHours(23, 59, 59, 999);
+              let e: Date;
+              if (endDate.length <= 10) {
+                const [y, m, d] = endDate.split('-').map(Number);
+                e = new Date(y, m - 1, d, 23, 59, 59, 999);
+              } else {
+                e = new Date(endDate);
+                e.setHours(23, 59, 59, 999);
+              }
               matchesDate = matchesDate && pDate <= e;
             }
           }
