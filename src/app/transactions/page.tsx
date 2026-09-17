@@ -22,6 +22,7 @@ import {
   Trash2,
   MoreVertical,
 } from 'lucide-react';
+import { formatISTDateTime } from '@/lib/dateUtils';
 
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -599,7 +600,7 @@ const toLocalISOString = (dateStr?: string) => {
                   <tr key={tx.id} className="hover:bg-slate-800/40 transition">
                     <td className="py-3.5 px-4 font-mono font-bold text-indigo-400">{tx.receiptNo}</td>
                     <td className="py-3.5 px-4 text-slate-400 text-[11px]">
-                      {new Date(tx.createdAt).toLocaleDateString()} {new Date(tx.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {formatISTDateTime(tx.createdAt)}
                     </td>
                     <td className="py-3.5 px-4 font-bold">
                       <span
@@ -678,7 +679,7 @@ const toLocalISOString = (dateStr?: string) => {
               <div className="space-y-1.5">
                 <div className="flex justify-between">
                   <span className="text-slate-500">Date:</span>
-                  <span className="text-slate-300">{new Date(activeReceipt.createdAt).toLocaleString()}</span>
+                  <span className="text-slate-300">{formatISTDateTime(activeReceipt.createdAt)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Party Name:</span>

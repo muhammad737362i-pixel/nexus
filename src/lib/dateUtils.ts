@@ -1,17 +1,23 @@
 /**
- * Date utility helpers for Global Active Working Business Date
+ * Date utility helpers for Global Active Working Business Date in Indian Standard Time (IST / Asia/Kolkata)
  */
+
+export function getTodayISTDateString(): string {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  return formatter.format(new Date());
+}
 
 export function getWorkingDate(): string {
   if (typeof window !== 'undefined') {
     const saved = localStorage.getItem('nexus_working_date');
     if (saved) return saved;
   }
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return getTodayISTDateString();
 }
 
 export function setWorkingDate(dateStr: string): void {
@@ -24,7 +30,27 @@ export function setWorkingDate(dateStr: string): void {
 export function getWorkingDateTimeISO(): string {
   const dateStr = getWorkingDate();
   const now = new Date();
-  const hours = String(now.getHours()).padStart(2, '0');
-  const mins = String(now.getMinutes()).padStart(2, '0');
-  return `${dateStr}T${hours}:${mins}`;
+  const formatterHours = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const timeStr = formatterHours.format(now);
+  return `${dateStr}T${timeStr}`;
+}
+
+export function formatISTDateTime(dateInput: Date | string | number): string {
+  if (!dateInput) return '—';
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
 }

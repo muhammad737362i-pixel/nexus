@@ -29,7 +29,7 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 
-import { getWorkingDateTimeISO } from '@/lib/dateUtils';
+import { getWorkingDateTimeISO, formatISTDateTime } from '@/lib/dateUtils';
 
 const toLocalISOString = (dateStr?: string) => {
   if (!dateStr) return getWorkingDateTimeISO();
@@ -948,7 +948,7 @@ export default function PaymentsPage() {
                 {filteredPayments.map((p: any) => (
                   <tr key={p.id} className="text-[11px]">
                     <td className="py-2 px-2 font-mono font-bold text-slate-900">{p.receiptNo}</td>
-                    <td className="py-2 px-2 text-slate-700">{new Date(p.createdAt).toLocaleString()}</td>
+                    <td className="py-2 px-2 text-slate-700">{formatISTDateTime(p.createdAt)}</td>
                     <td className="py-2 px-2 font-bold text-slate-900">{p.party?.name}</td>
                     <td className="py-2 px-2 font-bold">{p.type}</td>
                     <td className="py-2 px-2">{p.paymentMethod}</td>
@@ -987,7 +987,7 @@ export default function PaymentsPage() {
                 {filteredTransactions.map((tx: any) => (
                   <tr key={tx.id} className="text-[11px]">
                     <td className="py-2 px-2 font-mono font-bold text-slate-900">{tx.receiptNo}</td>
-                    <td className="py-2 px-2 text-slate-700">{new Date(tx.createdAt).toLocaleString()}</td>
+                    <td className="py-2 px-2 text-slate-700">{formatISTDateTime(tx.createdAt)}</td>
                     <td className="py-2 px-2 font-bold text-slate-900">{tx.party?.name}</td>
                     <td className="py-2 px-2 font-bold">{tx.type}</td>
                     <td className="py-2 px-2 text-right font-bold">{tx.amountGiven?.toLocaleString()} {tx.fromCurrency}</td>
@@ -1095,7 +1095,7 @@ export default function PaymentsPage() {
                           {p.receiptNo}
                         </td>
                         <td className="py-3.5 px-4 text-slate-400 font-mono">
-                          {new Date(p.createdAt).toLocaleString()}
+                          {formatISTDateTime(p.createdAt)}
                         </td>
                         <td className="py-3.5 px-4">
                           <div
@@ -1226,7 +1226,7 @@ export default function PaymentsPage() {
                           {tx.receiptNo}
                         </td>
                         <td className="py-3.5 px-4 text-slate-400 font-mono">
-                          {new Date(tx.createdAt).toLocaleString()}
+                          {formatISTDateTime(tx.createdAt)}
                         </td>
                         <td className="py-3.5 px-4">
                           <div
@@ -1504,7 +1504,7 @@ export default function PaymentsPage() {
               </div>
               <div className="flex justify-between border-b border-slate-800/80 pb-2">
                 <span className="text-slate-400">Date & Time:</span>
-                <span className="text-slate-300">{new Date(selectedReceipt.createdAt).toLocaleString()}</span>
+                <span className="text-slate-300">{formatISTDateTime(selectedReceipt.createdAt)}</span>
               </div>
               <div className="flex justify-between border-b border-slate-800/80 pb-2">
                 <span className="text-slate-400">Party Name:</span>
