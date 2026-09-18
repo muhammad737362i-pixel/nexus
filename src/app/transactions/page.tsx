@@ -22,7 +22,7 @@ import {
   Trash2,
   MoreVertical,
 } from 'lucide-react';
-import { formatISTDateTime, toISTDateTimeLocalString } from '@/lib/dateUtils';
+import { formatISTDateTime, toISTDateTimeLocalString, getTodayISTDateString } from '@/lib/dateUtils';
 
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -77,28 +77,27 @@ export default function TransactionsPage() {
     if (datePreset === 'CUSTOM') {
       return { start: startDate, end: endDate };
     }
-    const now = new Date();
+    const todayStr = getTodayISTDateString();
+    const [y, m, d] = todayStr.split('-').map(Number);
+    const todayObj = new Date(Date.UTC(y, m - 1, d));
+
     if (datePreset === 'TODAY') {
-      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
-      return { start, end };
+      return { start: todayStr, end: todayStr };
     }
     if (datePreset === 'YESTERDAY') {
-      const y = new Date(now);
-      y.setDate(y.getDate() - 1);
-      const start = new Date(y.getFullYear(), y.getMonth(), y.getDate()).toISOString();
-      const end = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23, 59, 59, 999).toISOString();
-      return { start, end };
+      const yObj = new Date(todayObj.getTime() - 86400000);
+      const yStr = `${yObj.getUTCFullYear()}-${String(yObj.getUTCMonth() + 1).padStart(2, '0')}-${String(yObj.getUTCDate()).padStart(2, '0')}`;
+      return { start: yStr, end: yStr };
     }
     if (datePreset === 'WEEK') {
-      const w = new Date(now);
-      w.setDate(w.getDate() - 7);
-      return { start: w.toISOString(), end: now.toISOString() };
+      const wObj = new Date(todayObj.getTime() - 7 * 86400000);
+      const wStr = `${wObj.getUTCFullYear()}-${String(wObj.getUTCMonth() + 1).padStart(2, '0')}-${String(wObj.getUTCDate()).padStart(2, '0')}`;
+      return { start: wStr, end: todayStr };
     }
     if (datePreset === 'MONTH') {
-      const m = new Date(now);
-      m.setDate(m.getDate() - 30);
-      return { start: m.toISOString(), end: now.toISOString() };
+      const mObj = new Date(todayObj.getTime() - 30 * 86400000);
+      const mStr = `${mObj.getUTCFullYear()}-${String(mObj.getUTCMonth() + 1).padStart(2, '0')}-${String(mObj.getUTCDate()).padStart(2, '0')}`;
+      return { start: mStr, end: todayStr };
     }
     return { start: '', end: '' };
   };

@@ -29,7 +29,15 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 
-import { getWorkingDateTimeISO, formatISTDateTime, toISTDateTimeLocalString } from '@/lib/dateUtils';
+import {
+  getWorkingDateTimeISO,
+  formatISTDateTime,
+  toISTDateTimeLocalString,
+  getISTDayStart,
+  getISTDayEnd,
+  parseISTDate,
+  getTodayISTDateString,
+} from '@/lib/dateUtils';
 
 export default function PaymentsPage() {
   const [data, setData] = useState<any>(null);
@@ -343,178 +351,146 @@ export default function PaymentsPage() {
     partyCategoryFilter !== 'ALL';
 
   // Filter trade transactions matching active filters for Expected Amount (USDT)
-  const filteredTransactions = !hasSpecificSelection
-    ? []
-    : transactions.filter((tx: any) => {
-        const matchesSearch =
-          searchTerm.trim() === '' ||
-          tx.receiptNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          tx.party?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (tx.notes && tx.notes.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredTransactions = transactions.filter((tx: any) => {
+    const matchesSearch =
+      searchTerm.trim() === '' ||
+      tx.receiptNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      tx.party?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (tx.notes && tx.notes.toLowerCase().includes(searchTerm.toLowerCase()));
 
-        const matchesCategory =
-          partyCategoryFilter === 'ALL' || tx.party?.type === partyCategoryFilter;
+    const matchesCategory =
+      partyCategoryFilter === 'ALL' || tx.party?.type === partyCategoryFilter;
 
-        const matchesParty =
-          selectedPartyFilter === 'ALL' || tx.partyId === selectedPartyFilter;
+    const matchesParty =
+      selectedPartyFilter === 'ALL' || tx.partyId === selectedPartyFilter;
 
-        let matchesDate = true;
-        if (datePreset !== 'ALL') {
-          const tDate = new Date(tx.createdAt);
-          const now = new Date();
-          if (datePreset === 'TODAY') {
-            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-            const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-            matchesDate = tDate >= start && tDate <= end;
-          } else if (datePreset === 'YESTERDAY') {
-            const yStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0);
-            const yEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
-            matchesDate = tDate >= yStart && tDate <= yEnd;
-          } else if (datePreset === 'WEEK') {
-            const wStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0, 0);
-            matchesDate = tDate >= wStart;
-          } else if (datePreset === 'MONTH') {
-            const mStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30, 0, 0, 0, 0);
-            matchesDate = tDate >= mStart;
-          } else if (datePreset === 'CUSTOM') {
-            if (startDate) {
-              let s: Date;
-              if (startDate.length <= 10) {
-                const [y, m, d] = startDate.split('-').map(Number);
-                s = new Date(y, m - 1, d, 0, 0, 0, 0);
-              } else {
-                s = new Date(startDate);
-              }
-              matchesDate = matchesDate && tDate >= s;
-            }
-            if (endDate) {
-              let e: Date;
-              if (endDate.length <= 10) {
-                const [y, m, d] = endDate.split('-').map(Number);
-                e = new Date(y, m - 1, d, 23, 59, 59, 999);
-              } else {
-                e = new Date(endDate);
-                e.setHours(23, 59, 59, 999);
-              }
-              matchesDate = matchesDate && tDate <= e;
-            }
-          }
+    let matchesDate = true;
+    if (datePreset !== 'ALL') {
+      const tDate = new Date(tx.createdAt);
+      const todayStr = getTodayISTDateString();
+      if (datePreset === 'TODAY') {
+        matchesDate = tDate >= getISTDayStart(todayStr) && tDate <= getISTDayEnd(todayStr);
+      } else if (datePreset === 'YESTERDAY') {
+        const [y, m, d] = todayStr.split('-').map(Number);
+        const yObj = new Date(Date.UTC(y, m - 1, d - 1));
+        const yStr = `${yObj.getUTCFullYear()}-${String(yObj.getUTCMonth() + 1).padStart(2, '0')}-${String(yObj.getUTCDate()).padStart(2, '0')}`;
+        matchesDate = tDate >= getISTDayStart(yStr) && tDate <= getISTDayEnd(yStr);
+      } else if (datePreset === 'WEEK') {
+        const [y, m, d] = todayStr.split('-').map(Number);
+        const wObj = new Date(Date.UTC(y, m - 1, d - 7));
+        const wStr = `${wObj.getUTCFullYear()}-${String(wObj.getUTCMonth() + 1).padStart(2, '0')}-${String(wObj.getUTCDate()).padStart(2, '0')}`;
+        matchesDate = tDate >= getISTDayStart(wStr);
+      } else if (datePreset === 'MONTH') {
+        const [y, m, d] = todayStr.split('-').map(Number);
+        const mObj = new Date(Date.UTC(y, m - 1, d - 30));
+        const mStr = `${mObj.getUTCFullYear()}-${String(mObj.getUTCMonth() + 1).padStart(2, '0')}-${String(mObj.getUTCDate()).padStart(2, '0')}`;
+        matchesDate = tDate >= getISTDayStart(mStr);
+      } else if (datePreset === 'CUSTOM') {
+        if (startDate) {
+          const s = startDate.length <= 10 ? getISTDayStart(startDate) : parseISTDate(startDate);
+          if (s) matchesDate = matchesDate && tDate >= s;
         }
+        if (endDate) {
+          const e = endDate.length <= 10 ? getISTDayEnd(endDate) : parseISTDate(endDate);
+          if (e) matchesDate = matchesDate && tDate <= e;
+        }
+      }
+    }
 
-        return matchesSearch && matchesCategory && matchesParty && matchesDate;
-      });
+    return matchesSearch && matchesCategory && matchesParty && matchesDate;
+  });
 
   // Calculate Filter-reactive Expected Amount (USDT)
-  const totalExpectedUSDT = !hasSpecificSelection
-    ? 0
-    : filteredTransactions.reduce((acc: number, tx: any) => {
-        return acc + getTxUsdtVolume(tx);
-      }, 0);
+  const totalExpectedUSDT = filteredTransactions.reduce((acc: number, tx: any) => {
+    return acc + getTxUsdtVolume(tx);
+  }, 0);
 
   // Calculate Filter-reactive Expected Amount (INR)
-  const totalExpectedINR = !hasSpecificSelection
-    ? 0
-    : filteredTransactions.reduce((acc: number, tx: any) => {
-        return acc + getTxInrVolume(tx);
-      }, 0);
+  const totalExpectedINR = filteredTransactions.reduce((acc: number, tx: any) => {
+    return acc + getTxInrVolume(tx);
+  }, 0);
 
   // Filter payments list based on all filter parameters
-  const filteredPayments = !hasSpecificSelection
-    ? []
-    : payments.filter((p: any) => {
-        const matchesSearch =
-          searchTerm.trim() === '' ||
-          p.receiptNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.party?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (p.referenceNo && p.referenceNo.toLowerCase().includes(searchTerm.toLowerCase())) ||
-          (p.notes && p.notes.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredPayments = payments.filter((p: any) => {
+    const matchesSearch =
+      searchTerm.trim() === '' ||
+      p.receiptNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.party?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.referenceNo && p.referenceNo.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (p.notes && p.notes.toLowerCase().includes(searchTerm.toLowerCase()));
 
-        const matchesCategory =
-          partyCategoryFilter === 'ALL' || p.party?.type === partyCategoryFilter;
+    const matchesCategory =
+      partyCategoryFilter === 'ALL' || p.party?.type === partyCategoryFilter;
 
-        const matchesParty =
-          selectedPartyFilter === 'ALL' || p.partyId === selectedPartyFilter;
+    const matchesParty =
+      selectedPartyFilter === 'ALL' || p.partyId === selectedPartyFilter;
 
-        const matchesDirection =
-          directionFilter === 'ALL' || p.type === directionFilter;
+    const matchesDirection =
+      directionFilter === 'ALL' || p.type === directionFilter;
 
-        const matchesMethod =
-          methodFilter === 'ALL' || p.paymentMethod === methodFilter;
+    const matchesMethod =
+      methodFilter === 'ALL' || p.paymentMethod === methodFilter;
 
-        const stats = partyLifetimeStats[p.partyId];
-        let matchesSettlement = true;
-        if (settlementFilter === 'PENDING') {
-          matchesSettlement = stats && stats.pendingUSDT > 0;
-        } else if (settlementFilter === 'SETTLED') {
-          matchesSettlement = stats && stats.pendingUSDT <= 0;
+    const stats = partyLifetimeStats[p.partyId];
+    let matchesSettlement = true;
+    if (settlementFilter === 'PENDING') {
+      matchesSettlement = stats && stats.pendingUSDT > 0;
+    } else if (settlementFilter === 'SETTLED') {
+      matchesSettlement = stats && stats.pendingUSDT <= 0;
+    }
+
+    let matchesDate = true;
+    if (datePreset !== 'ALL') {
+      const pDate = new Date(p.createdAt);
+      const todayStr = getTodayISTDateString();
+      if (datePreset === 'TODAY') {
+        matchesDate = pDate >= getISTDayStart(todayStr) && pDate <= getISTDayEnd(todayStr);
+      } else if (datePreset === 'YESTERDAY') {
+        const [y, m, d] = todayStr.split('-').map(Number);
+        const yObj = new Date(Date.UTC(y, m - 1, d - 1));
+        const yStr = `${yObj.getUTCFullYear()}-${String(yObj.getUTCMonth() + 1).padStart(2, '0')}-${String(yObj.getUTCDate()).padStart(2, '0')}`;
+        matchesDate = pDate >= getISTDayStart(yStr) && pDate <= getISTDayEnd(yStr);
+      } else if (datePreset === 'WEEK') {
+        const [y, m, d] = todayStr.split('-').map(Number);
+        const wObj = new Date(Date.UTC(y, m - 1, d - 7));
+        const wStr = `${wObj.getUTCFullYear()}-${String(wObj.getUTCMonth() + 1).padStart(2, '0')}-${String(wObj.getUTCDate()).padStart(2, '0')}`;
+        matchesDate = pDate >= getISTDayStart(wStr);
+      } else if (datePreset === 'MONTH') {
+        const [y, m, d] = todayStr.split('-').map(Number);
+        const mObj = new Date(Date.UTC(y, m - 1, d - 30));
+        const mStr = `${mObj.getUTCFullYear()}-${String(mObj.getUTCMonth() + 1).padStart(2, '0')}-${String(mObj.getUTCDate()).padStart(2, '0')}`;
+        matchesDate = pDate >= getISTDayStart(mStr);
+      } else if (datePreset === 'CUSTOM') {
+        if (startDate) {
+          const s = startDate.length <= 10 ? getISTDayStart(startDate) : parseISTDate(startDate);
+          if (s) matchesDate = matchesDate && pDate >= s;
         }
-
-        let matchesDate = true;
-        if (datePreset !== 'ALL') {
-          const pDate = new Date(p.createdAt);
-          const now = new Date();
-          if (datePreset === 'TODAY') {
-            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-            const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-            matchesDate = pDate >= start && pDate <= end;
-          } else if (datePreset === 'YESTERDAY') {
-            const yStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0);
-            const yEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
-            matchesDate = pDate >= yStart && pDate <= yEnd;
-          } else if (datePreset === 'WEEK') {
-            const wStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0, 0);
-            matchesDate = pDate >= wStart;
-          } else if (datePreset === 'MONTH') {
-            const mStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30, 0, 0, 0, 0);
-            matchesDate = pDate >= mStart;
-          } else if (datePreset === 'CUSTOM') {
-            if (startDate) {
-              let s: Date;
-              if (startDate.length <= 10) {
-                const [y, m, d] = startDate.split('-').map(Number);
-                s = new Date(y, m - 1, d, 0, 0, 0, 0);
-              } else {
-                s = new Date(startDate);
-              }
-              matchesDate = matchesDate && pDate >= s;
-            }
-            if (endDate) {
-              let e: Date;
-              if (endDate.length <= 10) {
-                const [y, m, d] = endDate.split('-').map(Number);
-                e = new Date(y, m - 1, d, 23, 59, 59, 999);
-              } else {
-                e = new Date(endDate);
-                e.setHours(23, 59, 59, 999);
-              }
-              matchesDate = matchesDate && pDate <= e;
-            }
-          }
+        if (endDate) {
+          const e = endDate.length <= 10 ? getISTDayEnd(endDate) : parseISTDate(endDate);
+          if (e) matchesDate = matchesDate && pDate <= e;
         }
+      }
+    }
 
-        return (
-          matchesSearch &&
-          matchesCategory &&
-          matchesParty &&
-          matchesDirection &&
-          matchesMethod &&
-          matchesSettlement &&
-          matchesDate
-        );
-      });
+    return (
+      matchesSearch &&
+      matchesCategory &&
+      matchesParty &&
+      matchesDirection &&
+      matchesMethod &&
+      matchesSettlement &&
+      matchesDate
+    );
+  });
 
   // Calculate Filter-reactive Paid Amount (USDT)
-  const totalPaidUSDT = !hasSpecificSelection
-    ? 0
-    : filteredPayments.reduce((acc: number, p: any) => {
-        return acc + getPayUsdtAmount(p);
-      }, 0);
+  const totalPaidUSDT = filteredPayments.reduce((acc: number, p: any) => {
+    return acc + getPayUsdtAmount(p);
+  }, 0);
 
   // Calculate Overall Pending Amount (USDT)
   let totalOverallPendingUSDT = 0;
-  if (!hasSpecificSelection) {
-    totalOverallPendingUSDT = 0;
-  } else if (selectedPartyFilter !== 'ALL') {
+  if (selectedPartyFilter !== 'ALL') {
     const pStat = partyLifetimeStats[selectedPartyFilter];
     totalOverallPendingUSDT = pStat ? pStat.pendingUSDT : 0;
   } else {
