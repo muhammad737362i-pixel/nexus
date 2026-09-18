@@ -21,6 +21,7 @@ import {
   SlidersHorizontal,
   Trash2,
   MoreVertical,
+  AlertTriangle,
 } from 'lucide-react';
 import { formatISTDateTime, toISTDateTimeLocalString, getTodayISTDateString } from '@/lib/dateUtils';
 
@@ -52,6 +53,26 @@ export default function TransactionsPage() {
 
   const [loading, setLoading] = useState(true);
   const [activeReceipt, setActiveReceipt] = useState<any | null>(null);
+  const [showClearConfirmModal, setShowClearConfirmModal] = useState(false);
+  const [clearing, setClearing] = useState(false);
+
+  const handleClearAllTransactions = async () => {
+    setClearing(true);
+    try {
+      const res = await fetch('/api/admin/clear-transactions', { method: 'POST' });
+      const json = await res.json();
+      if (json.success) {
+        setShowClearConfirmModal(false);
+        fetchTransactions();
+      } else {
+        alert(json.error || 'Failed to clear transactions');
+      }
+    } catch (e: any) {
+      alert(e.message || 'Error clearing transactions');
+    } finally {
+      setClearing(false);
+    }
+  };
 
   // Load parties and currencies for dropdown options
   useEffect(() => {
@@ -316,6 +337,12 @@ export default function TransactionsPage() {
             className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-semibold text-xs flex items-center gap-2 border border-slate-700 transition"
           >
             <Download className="w-4 h-4" /> Export Filtered CSV
+          </button>
+          <button
+            onClick={() => setShowClearConfirmModal(true)}
+            className="px-4 py-2.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 rounded-xl font-semibold text-xs flex items-center gap-2 border border-rose-500/30 transition cursor-pointer"
+          >
+            <Trash2 className="w-4 h-4" /> Clear All History
           </button>
         </div>
       </div>
@@ -886,6 +913,50 @@ export default function TransactionsPage() {
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Clear All Transactions Confirmation Modal */}
+      {showClearConfirmModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
+            <div className="flex items-center gap-3 text-rose-400">
+              <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg text-white">Clear All Transaction History?</h3>
+                <p className="text-slate-400 text-xs mt-0.5">This action cannot be undone.</p>
+              </div>
+            </div>
+
+            <p className="text-slate-300 text-xs leading-relaxed">
+              Are you sure you want to permanently delete all buy/sell transactions, payments, and ledger entries? 
+              <br /><br />
+              <strong className="text-emerald-400 font-semibold">• Preserved:</strong> Parties, Users, and Rates will stay intact.
+              <br />
+              <strong className="text-rose-400 font-semibold">• Reset:</strong> Cash and bank inventory balances will be reset to zero.
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowClearConfirmModal(false)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={clearing}
+                onClick={handleClearAllTransactions}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl font-bold text-xs transition disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                {clearing ? 'Clearing...' : 'Yes, Delete All Data'}
+              </button>
+            </div>
           </div>
         </div>
       )}
