@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { processBuyTransaction, processSellTransaction, calculateTradeProfit } from '@/lib/exchange';
+import { parseISTDate, getISTDayStart, getISTDayEnd } from '@/lib/dateUtils';
 
 export async function GET(req: Request) {
   try {
@@ -35,20 +36,16 @@ export async function GET(req: Request) {
       where.createdAt = {};
       if (startDate) {
         if (startDate.length <= 10) {
-          const [y, m, d] = startDate.split('-').map(Number);
-          where.createdAt.gte = new Date(y, m - 1, d, 0, 0, 0, 0);
+          where.createdAt.gte = getISTDayStart(startDate);
         } else {
-          where.createdAt.gte = new Date(startDate);
+          where.createdAt.gte = parseISTDate(startDate);
         }
       }
       if (endDate) {
         if (endDate.length <= 10) {
-          const [y, m, d] = endDate.split('-').map(Number);
-          where.createdAt.lte = new Date(y, m - 1, d, 23, 59, 59, 999);
+          where.createdAt.lte = getISTDayEnd(endDate);
         } else {
-          const e = new Date(endDate);
-          if (!isNaN(e.getTime())) e.setHours(23, 59, 59, 999);
-          where.createdAt.lte = e;
+          where.createdAt.lte = parseISTDate(endDate);
         }
       }
     }
@@ -281,8 +278,7 @@ export async function PUT(req: Request) {
       marketSellRate
     );
 
-    const rawDate = createdAt ? new Date(createdAt) : undefined;
-    const validCreatedAt = (rawDate && !isNaN(rawDate.getTime())) ? rawDate : undefined;
+    const validCreatedAt = parseISTDate(createdAt);
 
     const updatedTx = await prisma.transaction.update({
       where: { id },

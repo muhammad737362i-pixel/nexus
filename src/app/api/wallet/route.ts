@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { parseISTDate } from '@/lib/dateUtils';
 
 export async function GET() {
   try {
@@ -142,7 +143,7 @@ export async function POST(req: Request) {
           paymentMethod,
           sourceOrDestination: sourceOrDestination || (type.includes('DEPOSIT') ? 'Owner Deposit' : 'Capital Adjustment'),
           notes,
-          ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
+          ...(createdAt ? { createdAt: parseISTDate(createdAt) } : {}),
         },
       });
 
@@ -264,7 +265,7 @@ export async function PUT(req: Request) {
           paymentMethod: newMethod,
           sourceOrDestination: sourceOrDestination !== undefined ? sourceOrDestination : oldTx.sourceOrDestination,
           notes: notes !== undefined ? notes : oldTx.notes,
-          ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
+          ...(createdAt ? { createdAt: parseISTDate(createdAt) } : {}),
         },
       });
     });

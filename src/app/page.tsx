@@ -19,7 +19,7 @@ import {
   RotateCcw,
   Filter,
 } from 'lucide-react';
-import { getWorkingDate, setWorkingDate } from '@/lib/dateUtils';
+import { getWorkingDate, setWorkingDate, getTodayISTDateString } from '@/lib/dateUtils';
 
 export default function Dashboard() {
   const [data, setData] = useState<any>(null);
@@ -38,12 +38,7 @@ export default function Dashboard() {
   };
 
   const resetWorkingDateToToday = () => {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const d = String(now.getDate()).padStart(2, '0');
-    const todayStr = `${y}-${m}-${d}`;
-    handleWorkingDateChange(todayStr);
+    handleWorkingDateChange(getTodayISTDateString());
   };
 
   // Date & Time Search Filter State
@@ -51,8 +46,7 @@ export default function Dashboard() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
-  const nowObj = new Date();
-  const todayStr = `${nowObj.getFullYear()}-${String(nowObj.getMonth() + 1).padStart(2, '0')}-${String(nowObj.getDate()).padStart(2, '0')}`;
+  const todayStr = getTodayISTDateString();
 
   // Compute ISO date range from preset or custom input
   const getComputedDates = () => {
@@ -60,31 +54,26 @@ export default function Dashboard() {
       return { start: startDate, end: endDate };
     }
     const targetDateStr = workingDate || todayStr;
-    const parts = targetDateStr.split('-').map(Number);
-    const y = parts[0] || nowObj.getFullYear();
-    const m = (parts[1] || nowObj.getMonth() + 1) - 1;
-    const d = parts[2] || nowObj.getDate();
+    const [y, m, d] = targetDateStr.split('-').map(Number);
+    const targetDateObj = new Date(Date.UTC(y, m - 1, d));
 
     if (datePreset === 'TODAY') {
-      const start = new Date(y, m, d, 0, 0, 0, 0).toISOString();
-      const end = new Date(y, m, d, 23, 59, 59, 999).toISOString();
-      return { start, end };
+      return { start: targetDateStr, end: targetDateStr };
     }
     if (datePreset === 'YESTERDAY') {
-      const yDate = new Date(y, m, d - 1);
-      const start = new Date(yDate.getFullYear(), yDate.getMonth(), yDate.getDate(), 0, 0, 0, 0).toISOString();
-      const end = new Date(yDate.getFullYear(), yDate.getMonth(), yDate.getDate(), 23, 59, 59, 999).toISOString();
-      return { start, end };
+      const yObj = new Date(targetDateObj.getTime() - 86400000);
+      const yStr = `${yObj.getUTCFullYear()}-${String(yObj.getUTCMonth() + 1).padStart(2, '0')}-${String(yObj.getUTCDate()).padStart(2, '0')}`;
+      return { start: yStr, end: yStr };
     }
     if (datePreset === 'WEEK') {
-      const wStart = new Date(y, m, d - 7, 0, 0, 0, 0);
-      const wEnd = new Date(y, m, d, 23, 59, 59, 999);
-      return { start: wStart.toISOString(), end: wEnd.toISOString() };
+      const wObj = new Date(targetDateObj.getTime() - 7 * 86400000);
+      const wStr = `${wObj.getUTCFullYear()}-${String(wObj.getUTCMonth() + 1).padStart(2, '0')}-${String(wObj.getUTCDate()).padStart(2, '0')}`;
+      return { start: wStr, end: targetDateStr };
     }
     if (datePreset === 'MONTH') {
-      const mStart = new Date(y, m, d - 30, 0, 0, 0, 0);
-      const mEnd = new Date(y, m, d, 23, 59, 59, 999);
-      return { start: mStart.toISOString(), end: mEnd.toISOString() };
+      const mObj = new Date(targetDateObj.getTime() - 30 * 86400000);
+      const mStr = `${mObj.getUTCFullYear()}-${String(mObj.getUTCMonth() + 1).padStart(2, '0')}-${String(mObj.getUTCDate()).padStart(2, '0')}`;
+      return { start: mStr, end: targetDateStr };
     }
     return { start: '', end: '' }; // ALL TIME
   };

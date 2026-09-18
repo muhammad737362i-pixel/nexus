@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { parseISTDate, getISTDayStart } from '@/lib/dateUtils';
 
 async function generatePaymentReceiptNo(): Promise<string> {
   const year = new Date().getFullYear();
@@ -33,8 +34,7 @@ async function generatePaymentReceiptNo(): Promise<string> {
 
 export async function GET() {
   try {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
+    const todayStart = getISTDayStart();
 
     const [payments, parties, currencies, transactions] = await Promise.all([
       prisma.payment.findMany({
@@ -183,8 +183,7 @@ export async function POST(req: Request) {
 
     const receiptNo = await generatePaymentReceiptNo();
     const numericAmount = Number(amount);
-    const rawDate = createdAt ? new Date(createdAt) : undefined;
-    const payDate = (rawDate && !isNaN(rawDate.getTime())) ? rawDate : undefined;
+    const payDate = parseISTDate(createdAt);
 
     const result = await prisma.$transaction(async (tx: any) => {
       // 1. Create Payment Record
@@ -405,8 +404,7 @@ export async function PUT(req: Request) {
         },
       });
 
-      const rawDate = createdAt ? new Date(createdAt) : undefined;
-      const validCreatedAt = (rawDate && !isNaN(rawDate.getTime())) ? rawDate : undefined;
+      const validCreatedAt = parseISTDate(createdAt);
 
       // 3. Update Record
       return await tx.payment.update({

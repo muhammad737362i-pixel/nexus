@@ -1,4 +1,5 @@
 import { prisma } from './db';
+import { parseISTDate } from './dateUtils';
 
 export interface RateResult {
   appliedBuyRate: number;
@@ -142,8 +143,7 @@ export async function processBuyTransaction(params: {
   const totalProfit = calculateTradeProfit('BUY', amountGiven, appliedRate, fee, marketBuyRate, inrCurrency?.defaultSellRate || appliedRate);
 
   const receiptNo = await generateReceiptNo();
-  const rawDate = createdAt ? new Date(createdAt) : undefined;
-  const txDate = (rawDate && !isNaN(rawDate.getTime())) ? rawDate : undefined;
+  const txDate = parseISTDate(createdAt);
 
   return await prisma.$transaction(async (tx: any) => {
     const transaction = await tx.transaction.create({
@@ -233,8 +233,7 @@ export async function processSellTransaction(params: {
   const totalProfit = calculateTradeProfit('SELL', amountGiven, appliedRate, fee, inrCurrency?.defaultBuyRate || appliedRate, marketSellRate);
 
   const receiptNo = await generateReceiptNo();
-  const rawDate = createdAt ? new Date(createdAt) : undefined;
-  const txDate = (rawDate && !isNaN(rawDate.getTime())) ? rawDate : undefined;
+  const txDate = parseISTDate(createdAt);
 
   return await prisma.$transaction(async (tx: any) => {
     const transaction = await tx.transaction.create({

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { calculateTradeProfit } from '@/lib/exchange';
+import { parseISTDate, getISTDayStart, getISTDayEnd } from '@/lib/dateUtils';
 
 export async function GET(req: Request) {
   try {
@@ -15,38 +16,15 @@ export async function GET(req: Request) {
       if (startDate || endDate) {
         txWhere.createdAt = {};
         if (startDate) {
-          if (startDate.length <= 10) {
-            const [y, m, d] = startDate.split('-').map(Number);
-            txWhere.createdAt.gte = new Date(y, m - 1, d, 0, 0, 0, 0);
-          } else {
-            txWhere.createdAt.gte = new Date(startDate);
-          }
+          txWhere.createdAt.gte = startDate.length <= 10 ? getISTDayStart(startDate) : parseISTDate(startDate);
         }
         if (endDate) {
-          if (endDate.length <= 10) {
-            const [y, m, d] = endDate.split('-').map(Number);
-            txWhere.createdAt.lte = new Date(y, m - 1, d, 23, 59, 59, 999);
-          } else {
-            const e = new Date(endDate);
-            if (!isNaN(e.getTime())) e.setHours(23, 59, 59, 999);
-            txWhere.createdAt.lte = e;
-          }
+          txWhere.createdAt.lte = endDate.length <= 10 ? getISTDayEnd(endDate) : parseISTDate(endDate);
         }
       } else if (workingDate) {
-        const parts = workingDate.split('-').map(Number);
-        const y = parts[0];
-        const m = parts[1] - 1;
-        const d = parts[2];
-        const start = new Date(y, m, d, 0, 0, 0, 0);
-        const end = new Date(y, m, d, 23, 59, 59, 999);
-        txWhere.createdAt = { gte: start, lte: end };
+        txWhere.createdAt = { gte: getISTDayStart(workingDate), lte: getISTDayEnd(workingDate) };
       } else {
-        // Default: Today's transactions strictly between 00:00:00 and 23:59:59.999
-        const todayStart = new Date();
-        todayStart.setHours(0, 0, 0, 0);
-        const todayEnd = new Date();
-        todayEnd.setHours(23, 59, 59, 999);
-        txWhere.createdAt = { gte: todayStart, lte: todayEnd };
+        txWhere.createdAt = { gte: getISTDayStart(), lte: getISTDayEnd() };
       }
     }
 

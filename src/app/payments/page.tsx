@@ -29,15 +29,7 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 
-import { getWorkingDateTimeISO, formatISTDateTime } from '@/lib/dateUtils';
-
-const toLocalISOString = (dateStr?: string) => {
-  if (!dateStr) return getWorkingDateTimeISO();
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return getWorkingDateTimeISO();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
+import { getWorkingDateTimeISO, formatISTDateTime, toISTDateTimeLocalString } from '@/lib/dateUtils';
 
 export default function PaymentsPage() {
   const [data, setData] = useState<any>(null);
@@ -1160,7 +1152,7 @@ export default function PaymentsPage() {
                               <Receipt className="w-3 h-3" /> Voucher
                             </button>
                             <button
-                              onClick={() => setEditingPayment({ ...p, createdAt: toLocalISOString(p.createdAt) })}
+                              onClick={() => setEditingPayment({ ...p, createdAt: toISTDateTimeLocalString(p.createdAt) })}
                               title="Edit or Delete payment entry"
                               className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 transition cursor-pointer"
                             >

@@ -20,15 +20,7 @@ import {
   Edit2,
 } from 'lucide-react';
 
-import { getWorkingDateTimeISO } from '@/lib/dateUtils';
-
-const toLocalISOString = (dateStr?: string) => {
-  if (!dateStr) return getWorkingDateTimeISO();
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return getWorkingDateTimeISO();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
+import { getWorkingDateTimeISO, toISTDateTimeLocalString } from '@/lib/dateUtils';
 
 export default function WalletPage() {
   const [data, setData] = useState<any>(null);
@@ -449,7 +441,7 @@ export default function WalletPage() {
                       <td className="py-3 px-4 text-slate-400 italic">{tx.notes || '—'}</td>
                       <td className="py-3 px-4 text-center">
                         <button
-                          onClick={() => setEditingTx({ ...tx, createdAt: toLocalISOString(tx.createdAt) })}
+                          onClick={() => setEditingTx({ ...tx, createdAt: toISTDateTimeLocalString(tx.createdAt) })}
                           title="Edit or Delete transaction"
                           className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 transition cursor-pointer"
                         >

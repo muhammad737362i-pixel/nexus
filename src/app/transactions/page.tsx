@@ -22,7 +22,7 @@ import {
   Trash2,
   MoreVertical,
 } from 'lucide-react';
-import { formatISTDateTime } from '@/lib/dateUtils';
+import { formatISTDateTime, toISTDateTimeLocalString } from '@/lib/dateUtils';
 
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -237,13 +237,7 @@ export default function TransactionsPage() {
     }
   };
 
-const toLocalISOString = (dateStr?: string) => {
-  if (!dateStr) return new Date().toISOString().slice(0, 16);
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return new Date().toISOString().slice(0, 16);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
+
 
   const handleSaveTransactionEdit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -639,7 +633,7 @@ const toLocalISOString = (dateStr?: string) => {
                           <FileText className="w-3 h-3" /> Receipt
                         </button>
                         <button
-                          onClick={() => setEditingTx({ ...tx, createdAt: toLocalISOString(tx.createdAt) })}
+                          onClick={() => setEditingTx({ ...tx, createdAt: toISTDateTimeLocalString(tx.createdAt) })}
                           title="Edit or Delete transaction"
                           className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 transition cursor-pointer"
                         >
