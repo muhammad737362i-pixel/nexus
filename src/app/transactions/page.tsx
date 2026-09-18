@@ -203,7 +203,7 @@ export default function TransactionsPage() {
       t.totalProfit,
       t.paymentMethod,
       t.status,
-      new Date(t.createdAt).toLocaleString(),
+      formatISTDateTime(t.createdAt),
     ]);
 
     const csvContent =

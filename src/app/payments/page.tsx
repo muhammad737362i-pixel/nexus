@@ -867,7 +867,7 @@ export default function PaymentsPage() {
             </p>
           </div>
           <div className="text-right text-xs font-mono text-slate-700 space-y-1">
-            <div><strong className="text-slate-900">Date:</strong> {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+            <div><strong className="text-slate-900">Date:</strong> {new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric', month: 'long', day: 'numeric' })}</div>
             <div>
               <strong className="text-slate-900">Account / Party:</strong>{' '}
               {selectedPartyFilter !== 'ALL'

@@ -20,7 +20,7 @@ import {
   Edit2,
 } from 'lucide-react';
 
-import { getWorkingDateTimeISO, toISTDateTimeLocalString } from '@/lib/dateUtils';
+import { getWorkingDateTimeISO, toISTDateTimeLocalString, formatISTDateTime } from '@/lib/dateUtils';
 
 export default function WalletPage() {
   const [data, setData] = useState<any>(null);
@@ -407,7 +407,7 @@ export default function WalletPage() {
                   return (
                     <tr key={tx.id} className="hover:bg-slate-800/40 transition text-xs">
                       <td className="py-3 px-4 font-mono text-slate-400">
-                        {new Date(tx.createdAt).toLocaleString()}
+                        {formatISTDateTime(tx.createdAt)}
                       </td>
                       <td className="py-3 px-4">
                         <span

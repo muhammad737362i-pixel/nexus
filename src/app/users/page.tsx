@@ -20,6 +20,7 @@ import {
   XCircle,
   AlertTriangle,
 } from 'lucide-react';
+import { formatISTDateTime } from '@/lib/dateUtils';
 
 export default function UsersPage() {
   const [users, setUsers] = useState<any[]>([]);
@@ -373,7 +374,7 @@ export default function UsersPage() {
                       </button>
                     </td>
                     <td className="py-3.5 px-4 text-slate-400 text-[11px]">
-                      {new Date(user.createdAt).toLocaleDateString()}
+                      {formatISTDateTime(user.createdAt)}
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
