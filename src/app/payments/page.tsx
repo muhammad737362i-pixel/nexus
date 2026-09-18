@@ -1029,29 +1029,32 @@ export default function PaymentsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {filteredPayments.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="py-12 text-center text-xs text-slate-500">
-                      <div className="space-y-2">
-                        <Banknote className="w-8 h-8 mx-auto text-slate-600" />
-                        <p className="font-semibold text-slate-400">
-                          {!hasSpecificSelection
-                            ? 'Please select a Banker / Customer from the dropdown or enter a search term above to view payment records.'
-                            : 'No payment records match your filters.'}
-                        </p>
-                        {hasActiveFilters && hasSpecificSelection && (
-                          <button
-                            onClick={resetAllFilters}
-                            className="text-xs text-indigo-400 hover:text-indigo-300 font-bold underline no-print"
-                          >
-                            Reset all search filters
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  filteredPayments.map((p: any) => {
+                {(() => {
+                  const sortedPayments = [...filteredPayments].sort((a, b) => {
+                    const timeA = new Date(a.createdAt).getTime();
+                    const timeB = new Date(b.createdAt).getTime();
+                    if (timeB !== timeA) return timeB - timeA;
+                    return (b.receiptNo || '').localeCompare(a.receiptNo || '', undefined, { numeric: true });
+                  });
+                  return sortedPayments.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-12 text-center text-xs text-slate-500">
+                        <div className="space-y-2">
+                          <Banknote className="w-8 h-8 mx-auto text-slate-600" />
+                          <p className="font-semibold text-slate-400">No payment records match your filters.</p>
+                          {hasActiveFilters && (
+                            <button
+                              onClick={resetAllFilters}
+                              className="text-xs text-indigo-400 hover:text-indigo-300 font-bold underline no-print"
+                            >
+                              Reset all search filters
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    sortedPayments.map((p: any) => {
                     const isReceived = p.type === 'RECEIVED';
                     const isCustomer = p.party?.type === 'CUSTOMER';
                     const pStats = partyLifetimeStats[p.partyId];
@@ -1139,7 +1142,8 @@ export default function PaymentsPage() {
                       </tr>
                     );
                   })
-                )}
+                );
+              })()}
               </tbody>
             </table>
           </div>
@@ -1162,29 +1166,32 @@ export default function PaymentsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {filteredTransactions.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="py-12 text-center text-xs text-slate-500">
-                      <div className="space-y-2">
-                        <TrendingUp className="w-8 h-8 mx-auto text-slate-600" />
-                        <p className="font-semibold text-slate-400">
-                          {!hasSpecificSelection
-                            ? 'Please select a Banker / Customer from the dropdown or enter a search term above to view trade history.'
-                            : 'No trade records match your filters.'}
-                        </p>
-                        {hasActiveFilters && hasSpecificSelection && (
-                          <button
-                            onClick={resetAllFilters}
-                            className="text-xs text-indigo-400 hover:text-indigo-300 font-bold underline no-print"
-                          >
-                            Reset all search filters
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  filteredTransactions.map((tx: any) => {
+                {(() => {
+                  const sortedTradeTransactions = [...filteredTransactions].sort((a, b) => {
+                    const timeA = new Date(a.createdAt).getTime();
+                    const timeB = new Date(b.createdAt).getTime();
+                    if (timeB !== timeA) return timeB - timeA;
+                    return (b.receiptNo || '').localeCompare(a.receiptNo || '', undefined, { numeric: true });
+                  });
+                  return sortedTradeTransactions.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-12 text-center text-xs text-slate-500">
+                        <div className="space-y-2">
+                          <TrendingUp className="w-8 h-8 mx-auto text-slate-600" />
+                          <p className="font-semibold text-slate-400">No trade records match your filters.</p>
+                          {hasActiveFilters && (
+                            <button
+                              onClick={resetAllFilters}
+                              className="text-xs text-indigo-400 hover:text-indigo-300 font-bold underline no-print"
+                            >
+                              Reset all search filters
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    sortedTradeTransactions.map((tx: any) => {
                     const isBuy = tx.type === 'BUY';
                     const isCustomer = tx.party?.type === 'CUSTOMER';
 
@@ -1239,7 +1246,8 @@ export default function PaymentsPage() {
                       </tr>
                     );
                   })
-                )}
+                );
+              })()}
               </tbody>
             </table>
           </div>

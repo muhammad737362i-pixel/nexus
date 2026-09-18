@@ -72,7 +72,7 @@ export async function GET(req: Request) {
       include: {
         party: true,
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { receiptNo: 'desc' }, { id: 'desc' }],
     });
 
     const inrCurrency = await prisma.currency.findUnique({ where: { code: 'INR' } });

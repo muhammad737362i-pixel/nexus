@@ -39,7 +39,7 @@ export async function GET() {
     const [payments, parties, currencies, transactions] = await Promise.all([
       prisma.payment.findMany({
         take: 500,
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { receiptNo: 'desc' }, { id: 'desc' }],
         include: {
           party: true,
         },
@@ -52,7 +52,7 @@ export async function GET() {
       }),
       prisma.transaction.findMany({
         take: 1000,
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { receiptNo: 'desc' }, { id: 'desc' }],
         include: {
           party: true,
         },

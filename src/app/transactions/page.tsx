@@ -598,25 +598,32 @@ export default function TransactionsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/80">
-              {transactions.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-500">
-                    <div className="space-y-2">
-                      <Receipt className="w-8 h-8 mx-auto text-slate-600" />
-                      <p className="font-semibold text-slate-400">No transactions match your search filters.</p>
-                      {hasActiveFilters && (
-                        <button
-                          onClick={resetAllFilters}
-                          className="text-xs text-indigo-400 hover:text-indigo-300 font-bold underline"
-                        >
-                          Clear all filters
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                transactions.map((tx) => (
+              {(() => {
+                const sorted = [...transactions].sort((a, b) => {
+                  const timeA = new Date(a.createdAt).getTime();
+                  const timeB = new Date(b.createdAt).getTime();
+                  if (timeB !== timeA) return timeB - timeA;
+                  return (b.receiptNo || '').localeCompare(a.receiptNo || '', undefined, { numeric: true });
+                });
+                return sorted.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="py-12 text-center text-slate-500">
+                      <div className="space-y-2">
+                        <Receipt className="w-8 h-8 mx-auto text-slate-600" />
+                        <p className="font-semibold text-slate-400">No transactions match your search filters.</p>
+                        {hasActiveFilters && (
+                          <button
+                            onClick={resetAllFilters}
+                            className="text-xs text-indigo-400 hover:text-indigo-300 font-bold underline"
+                          >
+                            Clear all filters
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  sorted.map((tx) => (
                   <tr key={tx.id} className="hover:bg-slate-800/40 transition">
                     <td className="py-3.5 px-4 font-mono font-bold text-indigo-400">{tx.receiptNo}</td>
                     <td className="py-3.5 px-4 text-slate-400 text-[11px]">
@@ -669,7 +676,8 @@ export default function TransactionsPage() {
                     </td>
                   </tr>
                 ))
-              )}
+              );
+            })()}
             </tbody>
           </table>
         </div>

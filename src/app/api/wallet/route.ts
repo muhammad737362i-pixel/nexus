@@ -14,7 +14,7 @@ export async function GET() {
 
     const walletTransactions = await prisma.walletTransaction.findMany({
       take: 50,
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
 
     // Compute Base Valuation (Main Balance in INR)
