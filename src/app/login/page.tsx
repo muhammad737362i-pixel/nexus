@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sparkles, Lock, User, Eye, EyeOff, AlertCircle } from 'lucide-react';
 
@@ -11,6 +11,16 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [inactivityNotice, setInactivityNotice] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('reason') === 'inactivity') {
+        setInactivityNotice(true);
+      }
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,6 +77,13 @@ export default function LoginPage() {
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">Enter your credentials to access the system</p>
           </div>
+
+          {inactivityNotice && (
+            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3 text-amber-300 text-xs">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+              <span>Session expired. You were automatically logged out due to 15 minutes of inactivity.</span>
+            </div>
+          )}
 
           {error && (
             <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-3 text-rose-400 text-xs">
