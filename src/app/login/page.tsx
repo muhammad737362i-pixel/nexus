@@ -39,6 +39,11 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (data.success) {
+        if (typeof window !== 'undefined') {
+          const now = String(Date.now());
+          localStorage.setItem('nexus_last_activity_timestamp', now);
+          localStorage.setItem('nexus_last_activity_timestamp_updated', now);
+        }
         router.push('/');
         router.refresh();
       } else {
