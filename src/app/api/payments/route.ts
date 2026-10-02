@@ -82,7 +82,7 @@ export async function GET(req: Request) {
         paymentWhere.createdAt.gte = startDate.length <= 10 ? getISTDayStart(startDate) : parseISTDate(startDate);
       }
       if (endDate) {
-        paymentWhere.createdAt.lte = endDate.length <= 10 ? getISTDayStart(endDate) : parseISTDate(endDate);
+        paymentWhere.createdAt.lte = endDate.length <= 10 ? getISTDayEnd(endDate) : parseISTDate(endDate);
       }
     }
 
