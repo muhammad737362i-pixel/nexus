@@ -42,6 +42,8 @@ import {
 export default function PaymentsPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [searching, setSearching] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
 
@@ -77,27 +79,70 @@ export default function PaymentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  const fetchPayments = async () => {
+  // Load Metadata (Parties & Currencies) on mount without fetching full payments history
+  useEffect(() => {
+    async function loadMetadata() {
+      try {
+        const res = await fetch('/api/payments?metadataOnly=true');
+        const json = await res.json();
+        if (json.success) {
+          setData(json);
+          if (json.parties && json.parties.length > 0 && !partyId) {
+            const defaultParty = json.parties.find((p: any) => p.type === 'CUSTOMER') || json.parties[0];
+            setPartyId(defaultParty.id);
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadMetadata();
+  }, []);
+
+  const executeSearch = async () => {
+    setSearching(true);
+    setHasSearched(true);
     try {
-      const res = await fetch('/api/payments');
+      const params = new URLSearchParams();
+      if (searchTerm.trim()) params.append('search', searchTerm.trim());
+      if (directionFilter !== 'ALL') params.append('direction', directionFilter);
+      if (methodFilter !== 'ALL') params.append('method', methodFilter);
+      if (partyCategoryFilter !== 'ALL') params.append('partyCategory', partyCategoryFilter);
+      if (selectedPartyFilter !== 'ALL') params.append('partyId', selectedPartyFilter);
+
+      if (datePreset === 'TODAY') {
+        const todayStr = getTodayISTDateString();
+        params.append('startDate', todayStr);
+        params.append('endDate', todayStr);
+      } else if (datePreset === 'CUSTOM') {
+        if (startDate) params.append('startDate', startDate);
+        if (endDate) params.append('endDate', endDate);
+      }
+
+      const queryUrl = `/api/payments?${params.toString()}`;
+      const res = await fetch(queryUrl);
       const json = await res.json();
       if (json.success) {
-        setData(json);
-        if (json.parties && json.parties.length > 0 && !partyId) {
-          const defaultParty = json.parties.find((p: any) => p.type === 'CUSTOMER') || json.parties[0];
-          setPartyId(defaultParty.id);
-        }
+        setData((prev: any) => ({
+          ...prev,
+          payments: json.payments || [],
+          transactions: json.transactions || [],
+          summary: json.summary || {},
+          partyStats: json.partyStats || {},
+        }));
       }
     } catch (e) {
       console.error(e);
     } finally {
-      setLoading(false);
+      setSearching(false);
     }
   };
 
-  useEffect(() => {
-    fetchPayments();
-  }, []);
+  const fetchPayments = async () => {
+    executeSearch();
+  };
 
   const handleDirectionChange = (direction: 'RECEIVED' | 'SENT') => {
     setPaymentType(direction);
@@ -232,6 +277,12 @@ export default function PaymentsPage() {
     setDatePreset('ALL');
     setStartDate('');
     setEndDate('');
+    setHasSearched(false);
+    setData((prev: any) => ({
+      ...prev,
+      payments: [],
+      transactions: [],
+    }));
   };
 
   const handleDownloadPDF = () => {
@@ -795,6 +846,32 @@ export default function PaymentsPage() {
             </select>
           </div>
         </div>
+
+        {/* Search Execute Action Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-800/80">
+          <p className="text-xs text-slate-400">
+            {hasSearched
+              ? `Showing records matching selected filters.`
+              : `Select your search filters above and click "Search Payments Now" to query data.`}
+          </p>
+          <button
+            onClick={() => executeSearch()}
+            disabled={searching}
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 via-indigo-600 to-purple-600 hover:from-emerald-500 hover:to-purple-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition cursor-pointer flex items-center justify-center gap-2"
+          >
+            {searching ? (
+              <>
+                <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>Searching Payments...</span>
+              </>
+            ) : (
+              <>
+                <Search className="w-4 h-4" />
+                <span>Search Payments Now</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Print PDF Global Styles */}
@@ -1038,19 +1115,38 @@ export default function PaymentsPage() {
                   });
                   return sortedPayments.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-xs text-slate-500">
-                        <div className="space-y-2">
-                          <Banknote className="w-8 h-8 mx-auto text-slate-600" />
-                          <p className="font-semibold text-slate-400">No payment records match your filters.</p>
-                          {hasActiveFilters && (
+                      <td colSpan={8} className="py-16 text-center text-xs text-slate-500">
+                        {!hasSearched ? (
+                          <div className="space-y-3 max-w-sm mx-auto">
+                            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center mx-auto">
+                              <Search className="w-6 h-6" />
+                            </div>
+                            <div>
+                              <h4 className="font-bold text-white text-sm">Search Payments Hub</h4>
+                              <p className="text-slate-400 text-xs mt-1">
+                                Select your search criteria above and click <strong>"Search Payments Now"</strong> to query records.
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => executeSearch()}
+                              disabled={searching}
+                              className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/20 transition cursor-pointer flex items-center justify-center gap-2 mx-auto"
+                            >
+                              <Search className="w-3.5 h-3.5" /> Search Payments Now
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <Banknote className="w-8 h-8 mx-auto text-slate-600" />
+                            <p className="font-semibold text-slate-400">No payment records match your search filters.</p>
                             <button
                               onClick={resetAllFilters}
-                              className="text-xs text-indigo-400 hover:text-indigo-300 font-bold underline no-print"
+                              className="text-xs text-indigo-400 hover:text-indigo-300 font-bold underline no-print cursor-pointer"
                             >
-                              Reset all search filters
+                              Clear search filters
                             </button>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ) : (
@@ -1175,19 +1271,38 @@ export default function PaymentsPage() {
                   });
                   return sortedTradeTransactions.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-xs text-slate-500">
-                        <div className="space-y-2">
-                          <TrendingUp className="w-8 h-8 mx-auto text-slate-600" />
-                          <p className="font-semibold text-slate-400">No trade records match your filters.</p>
-                          {hasActiveFilters && (
+                      <td colSpan={8} className="py-16 text-center text-xs text-slate-500">
+                        {!hasSearched ? (
+                          <div className="space-y-3 max-w-sm mx-auto">
+                            <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center mx-auto">
+                              <Search className="w-6 h-6" />
+                            </div>
+                            <div>
+                              <h4 className="font-bold text-white text-sm">Search Trade Orders</h4>
+                              <p className="text-slate-400 text-xs mt-1">
+                                Select search parameters above and click <strong>"Search Payments Now"</strong> to load trade history.
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => executeSearch()}
+                              disabled={searching}
+                              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/20 transition cursor-pointer flex items-center justify-center gap-2 mx-auto"
+                            >
+                              <Search className="w-3.5 h-3.5" /> Search Payments Now
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <TrendingUp className="w-8 h-8 mx-auto text-slate-600" />
+                            <p className="font-semibold text-slate-400">No trade records match your search filters.</p>
                             <button
                               onClick={resetAllFilters}
-                              className="text-xs text-indigo-400 hover:text-indigo-300 font-bold underline no-print"
+                              className="text-xs text-indigo-400 hover:text-indigo-300 font-bold underline no-print cursor-pointer"
                             >
-                              Reset all search filters
+                              Clear search filters
                             </button>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ) : (

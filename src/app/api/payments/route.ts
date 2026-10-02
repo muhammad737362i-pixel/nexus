@@ -32,30 +32,115 @@ async function generatePaymentReceiptNo(): Promise<string> {
   return candidate;
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const { searchParams } = new URL(req.url);
+    const metadataOnly = searchParams.get('metadataOnly') === 'true';
+
+    const [parties, currencies] = await Promise.all([
+      prisma.party.findMany({ orderBy: { name: 'asc' } }),
+      prisma.currency.findMany({ orderBy: { code: 'asc' } }),
+    ]);
+
+    if (metadataOnly) {
+      return NextResponse.json({
+        success: true,
+        parties,
+        currencies,
+        payments: [],
+        transactions: [],
+        summary: {
+          todayReceived: 0,
+          todaySent: 0,
+          netToday: 0,
+          totalReceived: 0,
+          totalSent: 0,
+          totalPendingBankerOwed: 0,
+          totalPendingCustomerReceivable: 0,
+        },
+        partyStats: {},
+      });
+    }
+
+    const direction = searchParams.get('direction');
+    const partyId = searchParams.get('partyId');
+    const partyCategory = searchParams.get('partyCategory');
+    const method = searchParams.get('method');
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
+    const search = searchParams.get('search');
+
+    const paymentWhere: any = {};
+    if (direction && direction !== 'ALL') paymentWhere.type = direction;
+    if (partyId && partyId !== 'ALL') paymentWhere.partyId = partyId;
+    if (method && method !== 'ALL') paymentWhere.paymentMethod = method;
+    if (partyCategory && partyCategory !== 'ALL') paymentWhere.party = { type: partyCategory };
+
+    if (startDate || endDate) {
+      paymentWhere.createdAt = {};
+      if (startDate) {
+        paymentWhere.createdAt.gte = startDate.length <= 10 ? getISTDayStart(startDate) : parseISTDate(startDate);
+      }
+      if (endDate) {
+        paymentWhere.createdAt.lte = endDate.length <= 10 ? getISTDayStart(endDate) : parseISTDate(endDate);
+      }
+    }
+
+    if (search) {
+      const searchOr = [
+        { receiptNo: { contains: search } },
+        { referenceNo: { contains: search } },
+        { notes: { contains: search } },
+        { party: { name: { contains: search } } },
+      ];
+      if (paymentWhere.party) {
+        paymentWhere.AND = [{ party: paymentWhere.party }, { OR: searchOr }];
+        delete paymentWhere.party;
+      } else {
+        paymentWhere.OR = searchOr;
+      }
+    }
+
+    const txWhere: any = {};
+    if (partyId && partyId !== 'ALL') txWhere.partyId = partyId;
+    if (partyCategory && partyCategory !== 'ALL') txWhere.party = { type: partyCategory };
+    if (startDate || endDate) {
+      txWhere.createdAt = {};
+      if (startDate) {
+        txWhere.createdAt.gte = startDate.length <= 10 ? getISTDayStart(startDate) : parseISTDate(startDate);
+      }
+      if (endDate) {
+        txWhere.createdAt.lte = endDate.length <= 10 ? getISTDayEnd(endDate) : parseISTDate(endDate);
+      }
+    }
+    if (search) {
+      const searchOr = [
+        { receiptNo: { contains: search } },
+        { notes: { contains: search } },
+        { party: { name: { contains: search } } },
+      ];
+      if (txWhere.party) {
+        txWhere.AND = [{ party: txWhere.party }, { OR: searchOr }];
+        delete txWhere.party;
+      } else {
+        txWhere.OR = searchOr;
+      }
+    }
+
     const todayStart = getISTDayStart();
 
-    const [payments, parties, currencies, transactions] = await Promise.all([
+    const [payments, transactions] = await Promise.all([
       prisma.payment.findMany({
+        where: paymentWhere,
         take: 500,
         orderBy: [{ createdAt: 'desc' }, { receiptNo: 'desc' }, { id: 'desc' }],
-        include: {
-          party: true,
-        },
-      }),
-      prisma.party.findMany({
-        orderBy: { name: 'asc' },
-      }),
-      prisma.currency.findMany({
-        orderBy: { code: 'asc' },
+        include: { party: true },
       }),
       prisma.transaction.findMany({
+        where: txWhere,
         take: 1000,
         orderBy: [{ createdAt: 'desc' }, { receiptNo: 'desc' }, { id: 'desc' }],
-        include: {
-          party: true,
-        },
+        include: { party: true },
       }),
     ]);
 

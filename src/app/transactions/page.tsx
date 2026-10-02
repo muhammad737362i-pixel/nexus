@@ -52,6 +52,8 @@ export default function TransactionsPage() {
   const [endDate, setEndDate] = useState('');
 
   const [loading, setLoading] = useState(true);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [searching, setSearching] = useState(false);
   const [activeReceipt, setActiveReceipt] = useState<any | null>(null);
   const [showClearConfirmModal, setShowClearConfirmModal] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -63,7 +65,8 @@ export default function TransactionsPage() {
       const json = await res.json();
       if (json.success) {
         setShowClearConfirmModal(false);
-        fetchTransactions();
+        setTransactions([]);
+        setMetrics({ totalCount: 0, totalBuyVolume: 0, totalSellVolume: 0, totalProfit: 0 });
       } else {
         alert(json.error || 'Failed to clear transactions');
       }
@@ -74,7 +77,7 @@ export default function TransactionsPage() {
     }
   };
 
-  // Load parties and currencies for dropdown options
+  // Load parties and currencies metadata only on mount
   useEffect(() => {
     async function loadMetadata() {
       try {
@@ -88,6 +91,8 @@ export default function TransactionsPage() {
         if (currJson.success) setCurrencies(currJson.currencies || []);
       } catch (e) {
         console.error(e);
+      } finally {
+        setLoading(false);
       }
     }
     loadMetadata();
@@ -123,7 +128,9 @@ export default function TransactionsPage() {
     return { start: '', end: '' };
   };
 
-  const fetchTransactions = async () => {
+  const executeSearch = async () => {
+    setSearching(true);
+    setHasSearched(true);
     try {
       let url = '/api/transactions';
       const params = new URLSearchParams();
@@ -152,23 +159,13 @@ export default function TransactionsPage() {
     } catch (e) {
       console.error(e);
     } finally {
-      setLoading(false);
+      setSearching(false);
     }
   };
 
-  useEffect(() => {
-    fetchTransactions();
-  }, [
-    search,
-    filterType,
-    partyType,
-    selectedPartyId,
-    paymentMethod,
-    currencyFilter,
-    datePreset,
-    startDate,
-    endDate,
-  ]);
+  const fetchTransactions = async () => {
+    executeSearch();
+  };
 
   const resetAllFilters = () => {
     setSearch('');
@@ -180,6 +177,9 @@ export default function TransactionsPage() {
     setDatePreset('ALL');
     setStartDate('');
     setEndDate('');
+    setHasSearched(false);
+    setTransactions([]);
+    setMetrics({ totalCount: 0, totalBuyVolume: 0, totalSellVolume: 0, totalProfit: 0 });
   };
 
   const hasActiveFilters =
@@ -572,6 +572,32 @@ export default function TransactionsPage() {
             </select>
           </div>
         </div>
+
+        {/* Search Execute Action Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-800/80">
+          <p className="text-xs text-slate-400">
+            {hasSearched
+              ? `Showing trade records matching selected search filters.`
+              : `Select your search filters above and click "Search Transactions Now" to load trade records.`}
+          </p>
+          <button
+            onClick={executeSearch}
+            disabled={searching}
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition cursor-pointer flex items-center justify-center gap-2"
+          >
+            {searching ? (
+              <>
+                <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>Searching Transactions...</span>
+              </>
+            ) : (
+              <>
+                <Search className="w-4 h-4" />
+                <span>Search Transactions Now</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Transactions Table */}
@@ -607,19 +633,40 @@ export default function TransactionsPage() {
                 });
                 return sorted.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="py-12 text-center text-slate-500">
-                      <div className="space-y-2">
-                        <Receipt className="w-8 h-8 mx-auto text-slate-600" />
-                        <p className="font-semibold text-slate-400">No transactions match your search filters.</p>
-                        {hasActiveFilters && (
+                    <td colSpan={9} className="py-16 text-center text-slate-500">
+                      {!hasSearched ? (
+                        <div className="space-y-3 max-w-sm mx-auto">
+                          <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center mx-auto">
+                            <Search className="w-6 h-6" />
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-white text-sm">Search Transactions Audit Log</h4>
+                            <p className="text-slate-400 text-xs mt-1">
+                              Select search filters above and click <strong>"Search Transactions Now"</strong> to load trade history.
+                            </p>
+                          </div>
                           <button
-                            onClick={resetAllFilters}
-                            className="text-xs text-indigo-400 hover:text-indigo-300 font-bold underline"
+                            onClick={executeSearch}
+                            disabled={searching}
+                            className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/20 transition cursor-pointer flex items-center justify-center gap-2 mx-auto"
                           >
-                            Clear all filters
+                            <Search className="w-3.5 h-3.5" /> Search Transactions Now
                           </button>
-                        )}
-                      </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <Receipt className="w-8 h-8 mx-auto text-slate-600" />
+                          <p className="font-semibold text-slate-400">No transactions match your search filters.</p>
+                          {hasActiveFilters && (
+                            <button
+                              onClick={resetAllFilters}
+                              className="text-xs text-indigo-400 hover:text-indigo-300 font-bold underline cursor-pointer"
+                            >
+                              Clear all search filters
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ) : (
