@@ -539,7 +539,48 @@ export default function PaymentsPage() {
     return acc + getPayUsdtAmount(p);
   }, 0);
 
-  // Calculate Overall Pending Amount (USDT)
+  // Map Filtered Expected USDT, Paid USDT, and Pending USDT for each party within active search filter
+  const partyFilteredStats: Record<string, { expectedUSDT: number; paidUSDT: number; pendingUSDT: number }> = {};
+
+  parties.forEach((p: any) => {
+    partyFilteredStats[p.id] = { expectedUSDT: 0, paidUSDT: 0, pendingUSDT: 0 };
+  });
+
+  filteredTransactions.forEach((tx: any) => {
+    if (partyFilteredStats[tx.partyId]) {
+      partyFilteredStats[tx.partyId].expectedUSDT += getTxUsdtVolume(tx);
+    }
+  });
+
+  filteredPayments.forEach((p: any) => {
+    if (partyFilteredStats[p.partyId]) {
+      partyFilteredStats[p.partyId].paidUSDT += getPayUsdtAmount(p);
+    }
+  });
+
+  parties.forEach((p: any) => {
+    const s = partyFilteredStats[p.id];
+    if (s) {
+      s.pendingUSDT = Number((s.expectedUSDT - s.paidUSDT).toFixed(2));
+    }
+  });
+
+  // Calculate Filter-reactive Pending Amount (USDT)
+  let totalFilteredPendingUSDT = 0;
+  if (selectedPartyFilter !== 'ALL') {
+    const pStat = partyFilteredStats[selectedPartyFilter];
+    totalFilteredPendingUSDT = pStat ? pStat.pendingUSDT : 0;
+  } else {
+    parties.forEach((p: any) => {
+      const pStat = partyFilteredStats[p.id];
+      if (!pStat) return;
+      if (partyCategoryFilter === 'ALL' || p.type === partyCategoryFilter) {
+        totalFilteredPendingUSDT += pStat.pendingUSDT;
+      }
+    });
+  }
+
+  // Calculate Overall Lifetime Pending Amount (USDT)
   let totalOverallPendingUSDT = 0;
   if (selectedPartyFilter !== 'ALL') {
     const pStat = partyLifetimeStats[selectedPartyFilter];
@@ -582,8 +623,8 @@ export default function PaymentsPage() {
         </div>
       </div>
 
-      {/* 4 Core Financial Metric Cards (Expected USDT, Expected INR, Paid USDT, Overall Pending) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* 5 Core Financial Metric Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Metric 1: Expected Amount (USDT) */}
         <div className="glass-card rounded-2xl p-5 border border-indigo-500/30 relative overflow-hidden bg-gradient-to-br from-indigo-950/40 via-slate-900 to-slate-900">
           <div className="flex items-center justify-between mb-2">
@@ -594,10 +635,10 @@ export default function PaymentsPage() {
               <TrendingUp className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-white">
+          <div className="text-xl font-extrabold text-white">
             ${totalExpectedUSDT.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
           </div>
-          <div className="mt-2 text-xs text-slate-400">
+          <div className="mt-2 text-[11px] text-slate-400">
             Expected trade volume within selected filters
           </div>
         </div>
@@ -612,10 +653,10 @@ export default function PaymentsPage() {
               <DollarSign className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-sky-300">
+          <div className="text-xl font-extrabold text-sky-300">
             ₹{totalExpectedINR.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} INR
           </div>
-          <div className="mt-2 text-xs text-slate-400">
+          <div className="mt-2 text-[11px] text-slate-400">
             Total expected billed INR at applied rate
           </div>
         </div>
@@ -630,41 +671,71 @@ export default function PaymentsPage() {
               <CheckCircle2 className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-emerald-400">
+          <div className="text-xl font-extrabold text-emerald-400">
             ${totalPaidUSDT.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
           </div>
-          <div className="mt-2 text-xs text-slate-400">
+          <div className="mt-2 text-[11px] text-slate-400">
             Total settled payments within selected filters
           </div>
         </div>
 
-        {/* Metric 4: Overall Pending (USDT) */}
+        {/* Metric 4: Filtered Pending (USDT) - NEW FIELD */}
         <div className={`glass-card rounded-2xl p-5 border relative overflow-hidden bg-gradient-to-br ${
-          totalOverallPendingUSDT < 0
+          totalFilteredPendingUSDT < 0
             ? 'border-rose-500/40 from-rose-950/30 via-slate-900 to-slate-900'
             : 'border-amber-500/40 from-amber-950/30 via-slate-900 to-slate-900'
         }`}>
           <div className="flex items-center justify-between mb-2">
-            <span className={`text-xs font-semibold uppercase tracking-wider ${
-              totalOverallPendingUSDT < 0 ? 'text-rose-300' : 'text-amber-300'
+            <span className={`text-xs font-bold uppercase tracking-wider ${
+              totalFilteredPendingUSDT < 0 ? 'text-rose-300' : 'text-amber-300'
             }`}>
-              Overall Pending (USDT)
+              {datePreset === 'TODAY' ? "Today's Pending" : datePreset === 'YESTERDAY' ? "Yesterday's Pending" : 'Filter Pending'}
             </span>
             <div className={`p-2 rounded-xl border ${
-              totalOverallPendingUSDT < 0
+              totalFilteredPendingUSDT < 0
                 ? 'bg-rose-500/20 text-rose-400 border-rose-500/30'
                 : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
             }`}>
               <Clock className="w-4 h-4" />
             </div>
           </div>
-          <div className={`text-2xl font-extrabold ${
-            totalOverallPendingUSDT < 0 ? 'text-rose-400' : 'text-amber-400'
+          <div className={`text-xl font-extrabold ${
+            totalFilteredPendingUSDT < 0 ? 'text-rose-400' : 'text-amber-400'
+          }`}>
+            {totalFilteredPendingUSDT < 0 ? '-' : ''}${Math.abs(totalFilteredPendingUSDT).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
+          </div>
+          <div className="mt-2 text-[11px] text-slate-400">
+            Pending amount within selected search filter
+          </div>
+        </div>
+
+        {/* Metric 5: Overall Lifetime Pending (USDT) - PRESERVED */}
+        <div className={`glass-card rounded-2xl p-5 border relative overflow-hidden bg-gradient-to-br ${
+          totalOverallPendingUSDT < 0
+            ? 'border-purple-500/40 from-purple-950/30 via-slate-900 to-slate-900'
+            : 'border-orange-500/40 from-orange-950/30 via-slate-900 to-slate-900'
+        }`}>
+          <div className="flex items-center justify-between mb-2">
+            <span className={`text-xs font-bold uppercase tracking-wider ${
+              totalOverallPendingUSDT < 0 ? 'text-purple-300' : 'text-orange-300'
+            }`}>
+              Overall Pending
+            </span>
+            <div className={`p-2 rounded-xl border ${
+              totalOverallPendingUSDT < 0
+                ? 'bg-purple-500/20 text-purple-400 border-purple-500/30'
+                : 'bg-orange-500/20 text-orange-400 border-orange-500/30'
+            }`}>
+              <Clock className="w-4 h-4" />
+            </div>
+          </div>
+          <div className={`text-xl font-extrabold ${
+            totalOverallPendingUSDT < 0 ? 'text-purple-400' : 'text-orange-400'
           }`}>
             {totalOverallPendingUSDT < 0 ? '-' : ''}${Math.abs(totalOverallPendingUSDT).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
           </div>
-          <div className="mt-2 text-xs text-slate-400">
-            {totalOverallPendingUSDT < 0 ? '⚠️ Overpaid / Credit balance' : 'Overall total pending balance (Lifetime overall)'}
+          <div className="mt-2 text-[11px] text-slate-400">
+            Total lifetime overall pending balance
           </div>
         </div>
       </div>
@@ -930,39 +1001,54 @@ export default function PaymentsPage() {
           </div>
         </div>
 
-        {/* 4 Main Metric Boxes (Expected USDT, Expected INR, Paid USDT, Overall Pending) */}
-        <div className="grid grid-cols-4 gap-3 text-center my-4">
-          <div className="p-3 border border-indigo-300 rounded-xl bg-indigo-50">
-            <div className="text-[10px] font-bold text-indigo-900 uppercase tracking-wider">Expected Amount (USDT)</div>
-            <div className="text-base font-extrabold text-indigo-950 mt-1">
-              ${totalExpectedUSDT.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
+        {/* 5 Main Metric Boxes */}
+        <div className="grid grid-cols-5 gap-2 text-center my-4">
+          <div className="p-2.5 border border-indigo-300 rounded-xl bg-indigo-50">
+            <div className="text-[9px] font-bold text-indigo-900 uppercase tracking-wider">Expected (USDT)</div>
+            <div className="text-sm font-extrabold text-indigo-950 mt-1">
+              ${totalExpectedUSDT.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           </div>
 
-          <div className="p-3 border border-sky-300 rounded-xl bg-sky-50">
-            <div className="text-[10px] font-bold text-sky-900 uppercase tracking-wider">Expected Amount (INR)</div>
-            <div className="text-base font-extrabold text-sky-950 mt-1">
-              ₹{totalExpectedINR.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} INR
+          <div className="p-2.5 border border-sky-300 rounded-xl bg-sky-50">
+            <div className="text-[9px] font-bold text-sky-900 uppercase tracking-wider">Expected (INR)</div>
+            <div className="text-sm font-extrabold text-sky-950 mt-1">
+              ₹{totalExpectedINR.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           </div>
 
-          <div className="p-3 border border-emerald-300 rounded-xl bg-emerald-50">
-            <div className="text-[10px] font-bold text-emerald-900 uppercase tracking-wider">Paid Amount (USDT)</div>
-            <div className="text-base font-extrabold text-emerald-950 mt-1">
-              ${totalPaidUSDT.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
+          <div className="p-2.5 border border-emerald-300 rounded-xl bg-emerald-50">
+            <div className="text-[9px] font-bold text-emerald-900 uppercase tracking-wider">Paid (USDT)</div>
+            <div className="text-sm font-extrabold text-emerald-950 mt-1">
+              ${totalPaidUSDT.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           </div>
 
-          <div className={`p-3 border rounded-xl ${
-            totalOverallPendingUSDT < 0 ? 'border-rose-300 bg-rose-50' : 'border-amber-300 bg-amber-50'
+          <div className={`p-2.5 border rounded-xl ${
+            totalFilteredPendingUSDT < 0 ? 'border-rose-300 bg-rose-50' : 'border-amber-300 bg-amber-50'
           }`}>
-            <div className={`text-[10px] font-bold uppercase tracking-wider ${
-              totalOverallPendingUSDT < 0 ? 'text-rose-900' : 'text-amber-900'
-            }`}>Overall Pending (USDT)</div>
-            <div className={`text-base font-extrabold mt-1 ${
-              totalOverallPendingUSDT < 0 ? 'text-rose-950' : 'text-amber-950'
+            <div className={`text-[9px] font-bold uppercase tracking-wider ${
+              totalFilteredPendingUSDT < 0 ? 'text-rose-900' : 'text-amber-900'
             }`}>
-              {totalOverallPendingUSDT < 0 ? '-' : ''}${Math.abs(totalOverallPendingUSDT).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
+              {datePreset === 'TODAY' ? "Today's Pending" : 'Filter Pending'}
+            </div>
+            <div className={`text-sm font-extrabold mt-1 ${
+              totalFilteredPendingUSDT < 0 ? 'text-rose-950' : 'text-amber-950'
+            }`}>
+              {totalFilteredPendingUSDT < 0 ? '-' : ''}${Math.abs(totalFilteredPendingUSDT).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+          </div>
+
+          <div className={`p-2.5 border rounded-xl ${
+            totalOverallPendingUSDT < 0 ? 'border-purple-300 bg-purple-50' : 'border-orange-300 bg-orange-50'
+          }`}>
+            <div className={`text-[9px] font-bold uppercase tracking-wider ${
+              totalOverallPendingUSDT < 0 ? 'text-purple-900' : 'text-orange-900'
+            }`}>Overall Pending</div>
+            <div className={`text-sm font-extrabold mt-1 ${
+              totalOverallPendingUSDT < 0 ? 'text-purple-950' : 'text-orange-950'
+            }`}>
+              {totalOverallPendingUSDT < 0 ? '-' : ''}${Math.abs(totalOverallPendingUSDT).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           </div>
         </div>
@@ -1154,6 +1240,7 @@ export default function PaymentsPage() {
                     const isReceived = p.type === 'RECEIVED';
                     const isCustomer = p.party?.type === 'CUSTOMER';
                     const pStats = partyLifetimeStats[p.partyId];
+                    const pFiltered = partyFilteredStats[p.partyId];
 
                     return (
                       <tr key={p.id} className="hover:bg-slate-800/40 transition text-xs">
@@ -1177,13 +1264,18 @@ export default function PaymentsPage() {
                             )}
                             <span>{p.party?.name}</span>
                           </div>
-                          <div className="flex items-center gap-2 mt-0.5">
+                          <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                             <span className="text-[10px] text-slate-400 uppercase font-semibold">
                               {isCustomer ? 'Buyer / Customer' : 'Seller / Banker'}
                             </span>
-                            {pStats && pStats.pendingUSDT > 0 && (
-                              <span className="text-[9px] font-bold text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded">
-                                Owed: ${pStats.pendingUSDT.toLocaleString('en-US', { minimumFractionDigits: 2 })} USDT
+                            {pFiltered && pFiltered.pendingUSDT !== 0 && (
+                              <span className="text-[9px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded">
+                                {datePreset === 'TODAY' ? 'Today' : 'Filter'} Owed: ${pFiltered.pendingUSDT.toLocaleString('en-US', { minimumFractionDigits: 2 })} USDT
+                              </span>
+                            )}
+                            {pStats && pStats.pendingUSDT !== 0 && (
+                              <span className="text-[9px] font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 rounded">
+                                Overall Owed: ${pStats.pendingUSDT.toLocaleString('en-US', { minimumFractionDigits: 2 })} USDT
                               </span>
                             )}
                           </div>
