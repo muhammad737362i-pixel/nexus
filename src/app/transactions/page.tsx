@@ -77,9 +77,9 @@ export default function TransactionsPage() {
     }
   };
 
-  // Load parties, currencies metadata and initial transactions on mount
+  // Load parties and currencies metadata only on mount
   useEffect(() => {
-    async function loadInitialData() {
+    async function loadMetadata() {
       try {
         const [partyRes, currRes] = await Promise.all([
           fetch('/api/parties'),
@@ -89,14 +89,13 @@ export default function TransactionsPage() {
         const currJson = await currRes.json();
         if (partyJson.success) setParties(partyJson.parties || []);
         if (currJson.success) setCurrencies(currJson.currencies || []);
-        await executeSearch();
       } catch (e) {
         console.error(e);
       } finally {
         setLoading(false);
       }
     }
-    loadInitialData();
+    loadMetadata();
   }, []);
 
   // Compute effective date range based on datePreset
@@ -163,25 +162,6 @@ export default function TransactionsPage() {
       setSearching(false);
     }
   };
-
-  // Auto-execute search whenever filter criteria change (debounced for search text)
-  useEffect(() => {
-    if (loading) return;
-    const timer = setTimeout(() => {
-      executeSearch();
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [
-    search,
-    filterType,
-    partyType,
-    selectedPartyId,
-    paymentMethod,
-    currencyFilter,
-    datePreset,
-    startDate,
-    endDate,
-  ]);
 
   const fetchTransactions = async () => {
     executeSearch();

@@ -79,15 +79,14 @@ export default function PaymentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Load Metadata (Parties & Currencies) and initial data on mount
+  // Load Metadata (Parties & Currencies) on mount without fetching full payments history
   useEffect(() => {
-    async function loadInitialData() {
+    async function loadMetadata() {
       try {
-        const res = await fetch('/api/payments');
+        const res = await fetch('/api/payments?metadataOnly=true');
         const json = await res.json();
         if (json.success) {
           setData(json);
-          setHasSearched(true);
           if (json.parties && json.parties.length > 0 && !partyId) {
             const defaultParty = json.parties.find((p: any) => p.type === 'CUSTOMER') || json.parties[0];
             setPartyId(defaultParty.id);
@@ -99,7 +98,7 @@ export default function PaymentsPage() {
         setLoading(false);
       }
     }
-    loadInitialData();
+    loadMetadata();
   }, []);
 
   const executeSearch = async () => {
@@ -160,25 +159,6 @@ export default function PaymentsPage() {
       setSearching(false);
     }
   };
-
-  // Auto-execute search whenever filter criteria change (debounced for search text)
-  useEffect(() => {
-    if (loading) return;
-    const timer = setTimeout(() => {
-      executeSearch();
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [
-    searchTerm,
-    directionFilter,
-    methodFilter,
-    partyCategoryFilter,
-    selectedPartyFilter,
-    settlementFilter,
-    datePreset,
-    startDate,
-    endDate,
-  ]);
 
   const fetchPayments = async () => {
     executeSearch();
