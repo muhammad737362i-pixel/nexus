@@ -679,20 +679,20 @@ export default function PaymentsPage() {
           </div>
         </div>
 
-        {/* Metric 4: Filtered Pending (USDT) - NEW FIELD */}
+        {/* Metric 4: Filter Billed Trade Pending (Fixed) - NEW FIELD */}
         <div className={`glass-card rounded-2xl p-5 border relative overflow-hidden bg-gradient-to-br ${
-          totalFilteredPendingUSDT < 0
+          totalExpectedUSDT < 0
             ? 'border-rose-500/40 from-rose-950/30 via-slate-900 to-slate-900'
             : 'border-amber-500/40 from-amber-950/30 via-slate-900 to-slate-900'
         }`}>
           <div className="flex items-center justify-between mb-2">
             <span className={`text-xs font-bold uppercase tracking-wider ${
-              totalFilteredPendingUSDT < 0 ? 'text-rose-300' : 'text-amber-300'
+              totalExpectedUSDT < 0 ? 'text-rose-300' : 'text-amber-300'
             }`}>
-              {datePreset === 'TODAY' ? "Today's Pending" : datePreset === 'YESTERDAY' ? "Yesterday's Pending" : 'Filter Pending'}
+              {datePreset === 'TODAY' ? "Today Billed (Fixed)" : datePreset === 'YESTERDAY' ? "Yesterday Billed (Fixed)" : 'Filter Billed (Fixed)'}
             </span>
             <div className={`p-2 rounded-xl border ${
-              totalFilteredPendingUSDT < 0
+              totalExpectedUSDT < 0
                 ? 'bg-rose-500/20 text-rose-400 border-rose-500/30'
                 : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
             }`}>
@@ -700,12 +700,12 @@ export default function PaymentsPage() {
             </div>
           </div>
           <div className={`text-xl font-extrabold ${
-            totalFilteredPendingUSDT < 0 ? 'text-rose-400' : 'text-amber-400'
+            totalExpectedUSDT < 0 ? 'text-rose-400' : 'text-amber-400'
           }`}>
-            {totalFilteredPendingUSDT < 0 ? '-' : ''}${Math.abs(totalFilteredPendingUSDT).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
+            {totalExpectedUSDT < 0 ? '-' : ''}${Math.abs(totalExpectedUSDT).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
           </div>
           <div className="mt-2 text-[11px] text-slate-400">
-            Pending amount within selected search filter
+            Fixed trade balance billed in selected filter period (Does not reduce on payment)
           </div>
         </div>
 
@@ -1024,18 +1024,12 @@ export default function PaymentsPage() {
             </div>
           </div>
 
-          <div className={`p-2.5 border rounded-xl ${
-            totalFilteredPendingUSDT < 0 ? 'border-rose-300 bg-rose-50' : 'border-amber-300 bg-amber-50'
-          }`}>
-            <div className={`text-[9px] font-bold uppercase tracking-wider ${
-              totalFilteredPendingUSDT < 0 ? 'text-rose-900' : 'text-amber-900'
-            }`}>
-              {datePreset === 'TODAY' ? "Today's Pending" : 'Filter Pending'}
+          <div className="p-2.5 border border-amber-300 rounded-xl bg-amber-50">
+            <div className="text-[9px] font-bold text-amber-900 uppercase tracking-wider">
+              {datePreset === 'TODAY' ? "Today Billed (Fixed)" : 'Filter Billed (Fixed)'}
             </div>
-            <div className={`text-sm font-extrabold mt-1 ${
-              totalFilteredPendingUSDT < 0 ? 'text-rose-950' : 'text-amber-950'
-            }`}>
-              {totalFilteredPendingUSDT < 0 ? '-' : ''}${Math.abs(totalFilteredPendingUSDT).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            <div className="text-sm font-extrabold text-amber-950 mt-1">
+              ${totalExpectedUSDT.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           </div>
 
@@ -1268,13 +1262,13 @@ export default function PaymentsPage() {
                             <span className="text-[10px] text-slate-400 uppercase font-semibold">
                               {isCustomer ? 'Buyer / Customer' : 'Seller / Banker'}
                             </span>
-                            {pFiltered && pFiltered.pendingUSDT !== 0 && (
-                              <span className="text-[9px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded">
-                                {datePreset === 'TODAY' ? 'Today' : 'Filter'} Owed: ${pFiltered.pendingUSDT.toLocaleString('en-US', { minimumFractionDigits: 2 })} USDT
+                            {pFiltered && pFiltered.expectedUSDT > 0 && (
+                              <span className="text-[9px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded" title="Fixed trade amount billed in selected filter period (Does not reduce on payment)">
+                                {datePreset === 'TODAY' ? 'Today Billed' : 'Filter Billed'}: ${pFiltered.expectedUSDT.toLocaleString('en-US', { minimumFractionDigits: 2 })} USDT
                               </span>
                             )}
                             {pStats && pStats.pendingUSDT !== 0 && (
-                              <span className="text-[9px] font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 rounded">
+                              <span className="text-[9px] font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 rounded" title="Live net remaining balance (Reduces on payment)">
                                 Overall Owed: ${pStats.pendingUSDT.toLocaleString('en-US', { minimumFractionDigits: 2 })} USDT
                               </span>
                             )}
