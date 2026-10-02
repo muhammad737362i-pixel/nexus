@@ -16,55 +16,47 @@ export async function GET(req: Request) {
     const search = searchParams.get('search');
 
     const where: any = {};
+    const andConditions: any[] = [];
 
     if (type && type !== 'ALL') where.type = type;
     if (partyId && partyId !== 'ALL') where.partyId = partyId;
     if (paymentMethod && paymentMethod !== 'ALL') where.paymentMethod = paymentMethod;
 
     if (partyType && partyType !== 'ALL') {
-      where.party = { type: partyType };
+      andConditions.push({ party: { type: partyType } });
     }
 
     if (currency && currency !== 'ALL') {
-      where.OR = [
-        { fromCurrency: currency },
-        { toCurrency: currency },
-      ];
+      andConditions.push({
+        OR: [
+          { fromCurrency: currency },
+          { toCurrency: currency },
+        ],
+      });
     }
 
     if (startDate || endDate) {
       where.createdAt = {};
       if (startDate) {
-        if (startDate.length <= 10) {
-          where.createdAt.gte = getISTDayStart(startDate);
-        } else {
-          where.createdAt.gte = parseISTDate(startDate);
-        }
+        where.createdAt.gte = startDate.length <= 10 ? getISTDayStart(startDate) : parseISTDate(startDate);
       }
       if (endDate) {
-        if (endDate.length <= 10) {
-          where.createdAt.lte = getISTDayEnd(endDate);
-        } else {
-          where.createdAt.lte = parseISTDate(endDate);
-        }
+        where.createdAt.lte = endDate.length <= 10 ? getISTDayEnd(endDate) : parseISTDate(endDate);
       }
     }
 
     if (search) {
-      const searchCondition = [
-        { receiptNo: { contains: search } },
-        { notes: { contains: search } },
-        { party: { name: { contains: search } } },
-      ];
-      if (where.OR) {
-        where.AND = [
-          { OR: where.OR },
-          { OR: searchCondition },
-        ];
-        delete where.OR;
-      } else {
-        where.OR = searchCondition;
-      }
+      andConditions.push({
+        OR: [
+          { receiptNo: { contains: search } },
+          { notes: { contains: search } },
+          { party: { name: { contains: search } } },
+        ],
+      });
+    }
+
+    if (andConditions.length > 0) {
+      where.AND = andConditions;
     }
 
     const transactions = await prisma.transaction.findMany({
