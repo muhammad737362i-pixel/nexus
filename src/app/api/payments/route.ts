@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { parseISTDate, getISTDayStart } from '@/lib/dateUtils';
+import { parseISTDate, getISTDayStart, getISTDayEnd } from '@/lib/dateUtils';
 
 async function generatePaymentReceiptNo(): Promise<string> {
   const year = new Date().getFullYear();
