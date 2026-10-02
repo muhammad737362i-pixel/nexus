@@ -70,11 +70,14 @@ export async function GET(req: Request) {
     const endDate = searchParams.get('endDate');
     const search = searchParams.get('search');
 
+    const paymentAndConditions: any[] = [];
     const paymentWhere: any = {};
     if (direction && direction !== 'ALL') paymentWhere.type = direction;
     if (partyId && partyId !== 'ALL') paymentWhere.partyId = partyId;
     if (method && method !== 'ALL') paymentWhere.paymentMethod = method;
-    if (partyCategory && partyCategory !== 'ALL') paymentWhere.party = { type: partyCategory };
+    if (partyCategory && partyCategory !== 'ALL') {
+      paymentAndConditions.push({ party: { type: partyCategory } });
+    }
 
     if (startDate || endDate) {
       paymentWhere.createdAt = {};
@@ -87,23 +90,26 @@ export async function GET(req: Request) {
     }
 
     if (search) {
-      const searchOr = [
-        { receiptNo: { contains: search } },
-        { referenceNo: { contains: search } },
-        { notes: { contains: search } },
-        { party: { name: { contains: search } } },
-      ];
-      if (paymentWhere.party) {
-        paymentWhere.AND = [{ party: paymentWhere.party }, { OR: searchOr }];
-        delete paymentWhere.party;
-      } else {
-        paymentWhere.OR = searchOr;
-      }
+      paymentAndConditions.push({
+        OR: [
+          { receiptNo: { contains: search } },
+          { referenceNo: { contains: search } },
+          { notes: { contains: search } },
+          { party: { name: { contains: search } } },
+        ],
+      });
     }
 
+    if (paymentAndConditions.length > 0) {
+      paymentWhere.AND = paymentAndConditions;
+    }
+
+    const txAndConditions: any[] = [];
     const txWhere: any = {};
     if (partyId && partyId !== 'ALL') txWhere.partyId = partyId;
-    if (partyCategory && partyCategory !== 'ALL') txWhere.party = { type: partyCategory };
+    if (partyCategory && partyCategory !== 'ALL') {
+      txAndConditions.push({ party: { type: partyCategory } });
+    }
     if (startDate || endDate) {
       txWhere.createdAt = {};
       if (startDate) {
@@ -114,17 +120,16 @@ export async function GET(req: Request) {
       }
     }
     if (search) {
-      const searchOr = [
-        { receiptNo: { contains: search } },
-        { notes: { contains: search } },
-        { party: { name: { contains: search } } },
-      ];
-      if (txWhere.party) {
-        txWhere.AND = [{ party: txWhere.party }, { OR: searchOr }];
-        delete txWhere.party;
-      } else {
-        txWhere.OR = searchOr;
-      }
+      txAndConditions.push({
+        OR: [
+          { receiptNo: { contains: search } },
+          { notes: { contains: search } },
+          { party: { name: { contains: search } } },
+        ],
+      });
+    }
+    if (txAndConditions.length > 0) {
+      txWhere.AND = txAndConditions;
     }
 
     const todayStart = getISTDayStart();

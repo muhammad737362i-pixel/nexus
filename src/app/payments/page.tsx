@@ -79,14 +79,15 @@ export default function PaymentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Load Metadata (Parties & Currencies) on mount without fetching full payments history
+  // Load Metadata (Parties & Currencies) and initial data on mount
   useEffect(() => {
-    async function loadMetadata() {
+    async function loadInitialData() {
       try {
-        const res = await fetch('/api/payments?metadataOnly=true');
+        const res = await fetch('/api/payments');
         const json = await res.json();
         if (json.success) {
           setData(json);
+          setHasSearched(true);
           if (json.parties && json.parties.length > 0 && !partyId) {
             const defaultParty = json.parties.find((p: any) => p.type === 'CUSTOMER') || json.parties[0];
             setPartyId(defaultParty.id);
@@ -98,7 +99,7 @@ export default function PaymentsPage() {
         setLoading(false);
       }
     }
-    loadMetadata();
+    loadInitialData();
   }, []);
 
   const executeSearch = async () => {
@@ -112,9 +113,27 @@ export default function PaymentsPage() {
       if (partyCategoryFilter !== 'ALL') params.append('partyCategory', partyCategoryFilter);
       if (selectedPartyFilter !== 'ALL') params.append('partyId', selectedPartyFilter);
 
+      const todayStr = getTodayISTDateString();
       if (datePreset === 'TODAY') {
-        const todayStr = getTodayISTDateString();
         params.append('startDate', todayStr);
+        params.append('endDate', todayStr);
+      } else if (datePreset === 'YESTERDAY') {
+        const [y, m, d] = todayStr.split('-').map(Number);
+        const yObj = new Date(Date.UTC(y, m - 1, d - 1));
+        const yStr = `${yObj.getUTCFullYear()}-${String(yObj.getUTCMonth() + 1).padStart(2, '0')}-${String(yObj.getUTCDate()).padStart(2, '0')}`;
+        params.append('startDate', yStr);
+        params.append('endDate', yStr);
+      } else if (datePreset === 'WEEK') {
+        const [y, m, d] = todayStr.split('-').map(Number);
+        const wObj = new Date(Date.UTC(y, m - 1, d - 7));
+        const wStr = `${wObj.getUTCFullYear()}-${String(wObj.getUTCMonth() + 1).padStart(2, '0')}-${String(wObj.getUTCDate()).padStart(2, '0')}`;
+        params.append('startDate', wStr);
+        params.append('endDate', todayStr);
+      } else if (datePreset === 'MONTH') {
+        const [y, m, d] = todayStr.split('-').map(Number);
+        const mObj = new Date(Date.UTC(y, m - 1, d - 30));
+        const mStr = `${mObj.getUTCFullYear()}-${String(mObj.getUTCMonth() + 1).padStart(2, '0')}-${String(mObj.getUTCDate()).padStart(2, '0')}`;
+        params.append('startDate', mStr);
         params.append('endDate', todayStr);
       } else if (datePreset === 'CUSTOM') {
         if (startDate) params.append('startDate', startDate);
@@ -127,6 +146,8 @@ export default function PaymentsPage() {
       if (json.success) {
         setData((prev: any) => ({
           ...prev,
+          parties: json.parties || prev?.parties || [],
+          currencies: json.currencies || prev?.currencies || [],
           payments: json.payments || [],
           transactions: json.transactions || [],
           summary: json.summary || {},
@@ -139,6 +160,25 @@ export default function PaymentsPage() {
       setSearching(false);
     }
   };
+
+  // Auto-execute search whenever filter criteria change (debounced for search text)
+  useEffect(() => {
+    if (loading) return;
+    const timer = setTimeout(() => {
+      executeSearch();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [
+    searchTerm,
+    directionFilter,
+    methodFilter,
+    partyCategoryFilter,
+    selectedPartyFilter,
+    settlementFilter,
+    datePreset,
+    startDate,
+    endDate,
+  ]);
 
   const fetchPayments = async () => {
     executeSearch();
