@@ -151,6 +151,7 @@ export default function PaymentsPage() {
           transactions: json.transactions || [],
           summary: json.summary || {},
           partyStats: json.partyStats || {},
+          lifetimePartyStats: json.lifetimePartyStats || prev?.lifetimePartyStats || {},
         }));
       }
     } catch (e) {
