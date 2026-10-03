@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { LayoutWrapper } from '@/components/LayoutWrapper';
 import { ThemeProvider } from '@/context/ThemeContext';
@@ -8,6 +8,12 @@ export const metadata: Metadata = {
   description: 'Fast, secure personal currency exchange software with customer/banker custom rates',
 };
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -15,7 +21,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="bg-slate-950 text-slate-100 min-h-screen flex antialiased">
+      <body className="bg-slate-950 text-slate-100 min-h-screen flex flex-col lg:flex-row antialiased overflow-x-hidden">
         <ThemeProvider>
           <LayoutWrapper>{children}</LayoutWrapper>
         </ThemeProvider>
