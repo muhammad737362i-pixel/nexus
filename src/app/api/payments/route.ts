@@ -42,6 +42,68 @@ export async function GET(req: Request) {
       prisma.currency.findMany({ orderBy: { code: 'asc' } }),
     ]);
 
+    // Query all lifetime payments and transactions for calculating true Overall Lifetime Pending
+    const [allLifetimePayments, allLifetimeTransactions] = await Promise.all([
+      prisma.payment.findMany({
+        select: {
+          id: true,
+          type: true,
+          amount: true,
+          currencyCode: true,
+          partyId: true,
+        },
+      }),
+      prisma.transaction.findMany({
+        select: {
+          id: true,
+          type: true,
+          amountGiven: true,
+          amountReceived: true,
+          appliedRate: true,
+          fromCurrency: true,
+          toCurrency: true,
+          partyId: true,
+        },
+      }),
+    ]);
+
+    const usdCurr = currencies.find((c: any) => c.code === 'USD' || c.code === 'USDT');
+    const usdtRate = usdCurr?.defaultBuyRate || 88;
+
+    const lifetimePartyStats: Record<string, { expectedUSDT: number; paidUSDT: number; pendingUSDT: number }> = {};
+    parties.forEach((p: any) => {
+      lifetimePartyStats[p.id] = { expectedUSDT: 0, paidUSDT: 0, pendingUSDT: 0 };
+    });
+
+    allLifetimeTransactions.forEach((tx: any) => {
+      if (!lifetimePartyStats[tx.partyId]) return;
+      let vol = 0;
+      if (tx.toCurrency === 'USDT' || tx.toCurrency === 'USD') {
+        vol = tx.amountReceived || 0;
+      } else if (tx.fromCurrency === 'USDT' || tx.fromCurrency === 'USD') {
+        vol = tx.amountGiven || 0;
+      } else if (tx.appliedRate > 0) {
+        vol = (tx.amountGiven || 0) / tx.appliedRate;
+      }
+      lifetimePartyStats[tx.partyId].expectedUSDT += vol;
+    });
+
+    allLifetimePayments.forEach((p: any) => {
+      if (!lifetimePartyStats[p.partyId]) return;
+      let amt = p.amount || 0;
+      if (p.currencyCode === 'INR') {
+        amt = amt / usdtRate;
+      }
+      lifetimePartyStats[p.partyId].paidUSDT += amt;
+    });
+
+    parties.forEach((p: any) => {
+      const s = lifetimePartyStats[p.id];
+      if (s) {
+        s.pendingUSDT = Number((s.expectedUSDT - s.paidUSDT).toFixed(2));
+      }
+    });
+
     if (metadataOnly) {
       return NextResponse.json({
         success: true,
@@ -59,6 +121,7 @@ export async function GET(req: Request) {
           totalPendingCustomerReceivable: 0,
         },
         partyStats: {},
+        lifetimePartyStats,
       });
     }
 
@@ -238,6 +301,7 @@ export async function GET(req: Request) {
       currencies,
       transactions,
       partyStats,
+      lifetimePartyStats,
     });
   } catch (error: any) {
     console.error('Payments GET Error:', error);

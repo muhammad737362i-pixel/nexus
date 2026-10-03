@@ -600,14 +600,15 @@ export default function PaymentsPage() {
     });
   }
 
-  // Calculate Overall Lifetime Pending Amount (USDT)
+  // Calculate Overall Lifetime Pending Amount (USDT) - IMMUTABLE across search date filters
+  const activeLifetimeStats = data?.lifetimePartyStats || partyLifetimeStats;
   let totalOverallPendingUSDT = 0;
   if (selectedPartyFilter !== 'ALL') {
-    const pStat = partyLifetimeStats[selectedPartyFilter];
+    const pStat = activeLifetimeStats[selectedPartyFilter];
     totalOverallPendingUSDT = pStat ? pStat.pendingUSDT : 0;
   } else {
     parties.forEach((p: any) => {
-      const pStat = partyLifetimeStats[p.id];
+      const pStat = activeLifetimeStats[p.id];
       if (!pStat) return;
       if (partyCategoryFilter === 'ALL' || p.type === partyCategoryFilter) {
         totalOverallPendingUSDT += pStat.pendingUSDT;
@@ -699,20 +700,20 @@ export default function PaymentsPage() {
           </div>
         </div>
 
-        {/* Metric 4: Filter Billed Trade Pending (Fixed) - NEW FIELD */}
+        {/* Metric 4: Pending Within Filter (USDT) */}
         <div className={`glass-card rounded-2xl p-5 border relative overflow-hidden bg-gradient-to-br ${
-          totalExpectedUSDT < 0
+          totalFilteredPendingUSDT < 0
             ? 'border-rose-500/40 from-rose-950/30 via-slate-900 to-slate-900'
             : 'border-amber-500/40 from-amber-950/30 via-slate-900 to-slate-900'
         }`}>
           <div className="flex items-center justify-between mb-2">
             <span className={`text-xs font-bold uppercase tracking-wider ${
-              totalExpectedUSDT < 0 ? 'text-rose-300' : 'text-amber-300'
+              totalFilteredPendingUSDT < 0 ? 'text-rose-300' : 'text-amber-300'
             }`}>
-              {datePreset === 'TODAY' ? "Today Billed (Fixed)" : datePreset === 'YESTERDAY' ? "Yesterday Billed (Fixed)" : 'Filter Billed (Fixed)'}
+              {datePreset === 'TODAY' ? "Today Pending" : datePreset === 'YESTERDAY' ? "Yesterday Pending" : datePreset === 'ALL' ? "All Time Pending" : 'Pending Within Filter'}
             </span>
             <div className={`p-2 rounded-xl border ${
-              totalExpectedUSDT < 0
+              totalFilteredPendingUSDT < 0
                 ? 'bg-rose-500/20 text-rose-400 border-rose-500/30'
                 : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
             }`}>
@@ -720,16 +721,16 @@ export default function PaymentsPage() {
             </div>
           </div>
           <div className={`text-xl font-extrabold ${
-            totalExpectedUSDT < 0 ? 'text-rose-400' : 'text-amber-400'
+            totalFilteredPendingUSDT < 0 ? 'text-rose-400' : 'text-amber-400'
           }`}>
-            {totalExpectedUSDT < 0 ? '-' : ''}${Math.abs(totalExpectedUSDT).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
+            {totalFilteredPendingUSDT < 0 ? '-' : ''}${Math.abs(totalFilteredPendingUSDT).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
           </div>
           <div className="mt-2 text-[11px] text-slate-400">
-            Fixed trade balance billed in selected filter period (Does not reduce on payment)
+            Pending balance in search filter window (Expected - Paid)
           </div>
         </div>
 
-        {/* Metric 5: Overall Lifetime Pending (USDT) - PRESERVED */}
+        {/* Metric 5: Overall Lifetime Pending (USDT) - ALWAYS OVERALL */}
         <div className={`glass-card rounded-2xl p-5 border relative overflow-hidden bg-gradient-to-br ${
           totalOverallPendingUSDT < 0
             ? 'border-purple-500/40 from-purple-950/30 via-slate-900 to-slate-900'
@@ -755,7 +756,7 @@ export default function PaymentsPage() {
             {totalOverallPendingUSDT < 0 ? '-' : ''}${Math.abs(totalOverallPendingUSDT).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
           </div>
           <div className="mt-2 text-[11px] text-slate-400">
-            Total lifetime overall pending balance
+            Total overall lifetime pending balance across all time
           </div>
         </div>
       </div>
