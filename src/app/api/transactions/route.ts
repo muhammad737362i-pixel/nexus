@@ -14,6 +14,9 @@ export async function GET(req: Request) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     const search = searchParams.get('search');
+    const amount = searchParams.get('amount');
+    const minAmount = searchParams.get('minAmount');
+    const maxAmount = searchParams.get('maxAmount');
 
     const where: any = {};
     const andConditions: any[] = [];
@@ -45,13 +48,52 @@ export async function GET(req: Request) {
       }
     }
 
+    if (amount) {
+      const cleanAmt = parseFloat(amount.replace(/,/g, '').trim());
+      if (!isNaN(cleanAmt)) {
+        andConditions.push({
+          OR: [
+            { amountGiven: { gte: cleanAmt - 0.01, lte: cleanAmt + 0.01 } },
+            { toCurrency: 'INR', amountReceived: { gte: cleanAmt - 0.01, lte: cleanAmt + 0.01 } },
+          ],
+        });
+      }
+    }
+
+    if (minAmount || maxAmount) {
+      const amountCond: any = {};
+      if (minAmount) {
+        const cleanMin = parseFloat(minAmount.replace(/,/g, '').trim());
+        if (!isNaN(cleanMin)) amountCond.gte = cleanMin;
+      }
+      if (maxAmount) {
+        const cleanMax = parseFloat(maxAmount.replace(/,/g, '').trim());
+        if (!isNaN(cleanMax)) amountCond.lte = cleanMax;
+      }
+      if (Object.keys(amountCond).length > 0) {
+        andConditions.push({
+          OR: [
+            { amountGiven: amountCond },
+            { toCurrency: 'INR', amountReceived: amountCond },
+          ],
+        });
+      }
+    }
+
     if (search) {
+      const searchOr: any[] = [
+        { receiptNo: { contains: search } },
+        { notes: { contains: search } },
+        { party: { name: { contains: search } } },
+      ];
+
+      const searchNum = parseFloat(search.replace(/,/g, '').trim());
+      if (!isNaN(searchNum) && searchNum > 0) {
+        searchOr.push({ amountGiven: { gte: searchNum - 0.01, lte: searchNum + 0.01 } });
+      }
+
       andConditions.push({
-        OR: [
-          { receiptNo: { contains: search } },
-          { notes: { contains: search } },
-          { party: { name: { contains: search } } },
-        ],
+        OR: searchOr,
       });
     }
 

@@ -25,6 +25,46 @@ import {
 } from 'lucide-react';
 import { formatISTDateTime, toISTDateTimeLocalString, getTodayISTDateString } from '@/lib/dateUtils';
 
+function parseAmountInput(input: string) {
+  const raw = input.trim().toLowerCase();
+  if (!raw) return {};
+
+  const expanded = raw.replace(/(\d+(?:\.\d+)?)k\b/g, (_, num) => `${parseFloat(num) * 1000}`);
+
+  if (expanded.includes(' to ')) {
+    const [minStr, maxStr] = expanded.split(' to ');
+    const min = minStr?.replace(/[^\d.]/g, '');
+    const max = maxStr?.replace(/[^\d.]/g, '');
+    return { minAmount: min || undefined, maxAmount: max || undefined };
+  }
+
+  if (expanded.includes('-')) {
+    const parts = expanded.split('-');
+    if (parts.length === 2) {
+      const min = parts[0]?.replace(/[^\d.]/g, '');
+      const max = parts[1]?.replace(/[^\d.]/g, '');
+      return { minAmount: min || undefined, maxAmount: max || undefined };
+    }
+  }
+
+  if (expanded.startsWith('>') || expanded.startsWith('>=')) {
+    const min = expanded.replace(/[^\d.]/g, '');
+    return { minAmount: min || undefined };
+  }
+
+  if (expanded.startsWith('<') || expanded.startsWith('<=')) {
+    const max = expanded.replace(/[^\d.]/g, '');
+    return { maxAmount: max || undefined };
+  }
+
+  const cleaned = expanded.replace(/[^\d.]/g, '');
+  if (cleaned) {
+    return { amount: cleaned };
+  }
+
+  return {};
+}
+
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [metrics, setMetrics] = useState<{
@@ -40,6 +80,7 @@ export default function TransactionsPage() {
 
   // Combined Search & Filter State
   const [search, setSearch] = useState('');
+  const [amountFilter, setAmountFilter] = useState('');
   const [filterType, setFilterType] = useState<string>('ALL'); // ALL, BUY, SELL
   const [partyType, setPartyType] = useState<string>('ALL'); // ALL, CUSTOMER, BANKER
   const [selectedPartyId, setSelectedPartyId] = useState<string>('ALL');
@@ -142,6 +183,13 @@ export default function TransactionsPage() {
       if (paymentMethod !== 'ALL') params.append('paymentMethod', paymentMethod);
       if (currencyFilter !== 'ALL') params.append('currency', currencyFilter);
 
+      if (amountFilter.trim()) {
+        const { amount: parsedAmt, minAmount: parsedMin, maxAmount: parsedMax } = parseAmountInput(amountFilter);
+        if (parsedAmt) params.append('amount', parsedAmt);
+        if (parsedMin) params.append('minAmount', parsedMin);
+        if (parsedMax) params.append('maxAmount', parsedMax);
+      }
+
       const { start, end } = getComputedDates();
       if (start) params.append('startDate', start);
       if (end) params.append('endDate', end);
@@ -169,6 +217,7 @@ export default function TransactionsPage() {
 
   const resetAllFilters = () => {
     setSearch('');
+    setAmountFilter('');
     setFilterType('ALL');
     setPartyType('ALL');
     setSelectedPartyId('ALL');
@@ -184,6 +233,7 @@ export default function TransactionsPage() {
 
   const hasActiveFilters =
     search !== '' ||
+    amountFilter.trim() !== '' ||
     filterType !== 'ALL' ||
     partyType !== 'ALL' ||
     selectedPartyId !== 'ALL' ||
@@ -417,6 +467,9 @@ export default function TransactionsPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') executeSearch();
+              }}
               placeholder="Search by receipt #, customer/banker name, or notes..."
               className="bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none w-full font-medium"
             />
@@ -481,8 +534,8 @@ export default function TransactionsPage() {
 
         <hr className="border-slate-800/80" />
 
-        {/* Row 2: Select Filter Dropdowns (Party Type, Specific Person, Trade Type, Payment Method, Currency) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        {/* Row 2: Select Filter Dropdowns (Party Type, Specific Person, Trade Type, Payment Method, Currency, INR Amount) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           {/* Party Type Filter */}
           <div className="space-y-1">
             <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
@@ -570,6 +623,35 @@ export default function TransactionsPage() {
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* INR Amount Filter */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+              INR Amount (₹)
+            </label>
+            <div className="relative flex items-center">
+              <span className="absolute left-3 text-slate-400 font-bold text-xs pointer-events-none">₹</span>
+              <input
+                type="text"
+                value={amountFilter}
+                onChange={(e) => setAmountFilter(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') executeSearch();
+                }}
+                placeholder="e.g. 50000 or 10k-50k"
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-7 pr-7 py-2 text-white font-medium text-xs placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              />
+              {amountFilter && (
+                <button
+                  type="button"
+                  onClick={() => setAmountFilter('')}
+                  className="absolute right-2.5 text-slate-500 hover:text-white"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
