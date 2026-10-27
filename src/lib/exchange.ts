@@ -295,3 +295,238 @@ export async function processSellTransaction(params: {
     return transaction;
   });
 }
+
+/**
+ * Generates two sequential unique receipt numbers for a paired trade deal
+ */
+export async function generateTwoSequentialReceiptNos(): Promise<[string, string]> {
+  const year = new Date().getFullYear();
+  const prefix = `NX-${year}-`;
+
+  const lastTx = await prisma.transaction.findFirst({
+    where: { receiptNo: { startsWith: prefix } },
+    orderBy: { createdAt: 'desc' },
+    select: { receiptNo: true },
+  });
+
+  let nextNum = 1001;
+  if (lastTx?.receiptNo) {
+    const parts = lastTx.receiptNo.split('-');
+    const lastNum = parseInt(parts[parts.length - 1], 10);
+    if (!isNaN(lastNum)) {
+      nextNum = lastNum + 1;
+    }
+  }
+
+  let candidate1 = `${prefix}${nextNum}`;
+  while (await prisma.transaction.findUnique({ where: { receiptNo: candidate1 } })) {
+    nextNum++;
+    candidate1 = `${prefix}${nextNum}`;
+  }
+
+  nextNum++;
+  let candidate2 = `${prefix}${nextNum}`;
+  while (await prisma.transaction.findUnique({ where: { receiptNo: candidate2 } })) {
+    nextNum++;
+    candidate2 = `${prefix}${nextNum}`;
+  }
+
+  return [candidate1, candidate2];
+}
+
+/**
+ * Processes Paired 2-in-1 Deal Transaction
+ * Atomically records:
+ * 1. BUY transaction for Customer (Exchange buys USDT from customer, pays INR)
+ * 2. SELL transaction for Banker (Exchange sells USDT to banker, receives INR)
+ */
+export async function processPairedDealTransaction(params: {
+  customerId: string;
+  bankerId: string;
+  fromCurrency?: string; // Default 'INR'
+  toCurrency?: string;   // Default 'USDT'
+  usdtAmount: number;
+  buyRate: number;
+  sellRate: number;
+  buyAmountINR?: number;
+  sellAmountINR?: number;
+  buyPaymentMethod?: string;
+  sellPaymentMethod?: string;
+  buyFee?: number;
+  sellFee?: number;
+  notes?: string;
+  createdAt?: Date | string;
+}) {
+  const {
+    customerId,
+    bankerId,
+    fromCurrency = 'INR',
+    toCurrency = 'USDT',
+    usdtAmount,
+    buyRate,
+    sellRate,
+    buyPaymentMethod = 'CASH',
+    sellPaymentMethod = 'CASH',
+    buyFee = 0,
+    sellFee = 0,
+    notes,
+    createdAt,
+  } = params;
+
+  if (!customerId || !bankerId) {
+    throw new Error('Both Customer and Banker must be selected for a deal');
+  }
+  if (usdtAmount <= 0) {
+    throw new Error('USDT amount must be greater than 0');
+  }
+  if (buyRate <= 0 || sellRate <= 0) {
+    throw new Error('Buy and Sell rates must be greater than 0');
+  }
+
+  const [customer, banker] = await Promise.all([
+    prisma.party.findUnique({ where: { id: customerId } }),
+    prisma.party.findUnique({ where: { id: bankerId } }),
+  ]);
+
+  if (!customer) throw new Error('Customer party not found');
+  if (!banker) throw new Error('Banker party not found');
+
+  const buyAmountINR = params.buyAmountINR && params.buyAmountINR > 0
+    ? Number(params.buyAmountINR.toFixed(2))
+    : Number((usdtAmount * buyRate).toFixed(2));
+
+  const sellAmountINR = params.sellAmountINR && params.sellAmountINR > 0
+    ? Number(params.sellAmountINR.toFixed(2))
+    : Number((usdtAmount * sellRate).toFixed(2));
+
+  const grossProfitINR = Number((sellAmountINR - buyAmountINR + buyFee + sellFee).toFixed(2));
+  const grossProfitUSDT = sellRate > 0 ? Number((grossProfitINR / sellRate).toFixed(2)) : 0;
+
+  const [buyReceiptNo, sellReceiptNo] = await generateTwoSequentialReceiptNos();
+  const txDate = parseISTDate(createdAt);
+
+  return await prisma.$transaction(async (tx: any) => {
+    // 1. Create BUY transaction (Customer)
+    const buyTransaction = await tx.transaction.create({
+      data: {
+        receiptNo: buyReceiptNo,
+        type: 'BUY',
+        partyId: customerId,
+        fromCurrency,
+        toCurrency,
+        amountGiven: buyAmountINR,
+        amountReceived: usdtAmount,
+        appliedRate: buyRate,
+        fee: buyFee,
+        totalProfit: 0,
+        paymentMethod: buyPaymentMethod,
+        status: 'COMPLETED',
+        notes: notes ? `${notes} | Paired Sell: ${sellReceiptNo}` : `Paired Sell: ${sellReceiptNo}`,
+        ...(txDate ? { createdAt: txDate } : {}),
+      },
+      include: {
+        party: true,
+      },
+    });
+
+    // 2. Create SELL transaction (Banker) - holds total profit of the deal
+    const sellTransaction = await tx.transaction.create({
+      data: {
+        receiptNo: sellReceiptNo,
+        type: 'SELL',
+        partyId: bankerId,
+        fromCurrency,
+        toCurrency,
+        amountGiven: sellAmountINR,
+        amountReceived: usdtAmount,
+        appliedRate: sellRate,
+        fee: sellFee,
+        totalProfit: grossProfitUSDT,
+        paymentMethod: sellPaymentMethod,
+        status: 'COMPLETED',
+        notes: notes ? `${notes} | Paired Buy: ${buyReceiptNo}` : `Paired Buy: ${buyReceiptNo}`,
+        ...(txDate ? { createdAt: txDate } : {}),
+      },
+      include: {
+        party: true,
+      },
+    });
+
+    // 3. Create Ledger Entries
+    // Customer Payout (CREDIT)
+    await tx.ledgerEntry.create({
+      data: {
+        partyId: customerId,
+        transactionId: buyTransaction.id,
+        currencyCode: fromCurrency,
+        type: 'CREDIT',
+        amount: buyAmountINR,
+        balanceAfter: buyAmountINR,
+        notes: `Payout for Buy order (${buyReceiptNo}) [Deal with ${banker.name}]`,
+        ...(txDate ? { createdAt: txDate } : {}),
+      },
+    });
+
+    // Banker Collection (DEBIT)
+    await tx.ledgerEntry.create({
+      data: {
+        partyId: bankerId,
+        transactionId: sellTransaction.id,
+        currencyCode: fromCurrency,
+        type: 'DEBIT',
+        amount: sellAmountINR,
+        balanceAfter: sellAmountINR,
+        notes: `Sell trade payment received (${sellReceiptNo}) [Deal with ${customer.name}]`,
+        ...(txDate ? { createdAt: txDate } : {}),
+      },
+    });
+
+    // 4. Update Inventory
+    // Buy leg: Decreases INR inventory (payout to customer)
+    let invINRFrom = await tx.currencyInventory.findUnique({ where: { currencyCode: fromCurrency } });
+    if (!invINRFrom) {
+      invINRFrom = await tx.currencyInventory.create({ data: { currencyCode: fromCurrency, cashBalance: 0, bankBalance: 0 } });
+    }
+    const buyMethodField = buyPaymentMethod === 'BANK' ? 'bankBalance' : 'cashBalance';
+    const postBuyINR = Math.max(0, invINRFrom[buyMethodField] - buyAmountINR);
+    await tx.currencyInventory.update({
+      where: { currencyCode: fromCurrency },
+      data: { [buyMethodField]: Number(postBuyINR.toFixed(2)) },
+    });
+
+    // Sell leg: Increases INR inventory (collection from banker)
+    let invINRSell = await tx.currencyInventory.findUnique({ where: { currencyCode: fromCurrency } });
+    const sellMethodField = sellPaymentMethod === 'BANK' ? 'bankBalance' : 'cashBalance';
+    const postSellINR = (invINRSell ? invINRSell[sellMethodField] : 0) + sellAmountINR;
+    await tx.currencyInventory.update({
+      where: { currencyCode: fromCurrency },
+      data: { [sellMethodField]: Number(postSellINR.toFixed(2)) },
+    });
+
+    // USDT Inventory:
+    // If payment methods differ between legs, adjust respective cash/bank accounts
+    if (buyPaymentMethod !== sellPaymentMethod) {
+      let invUSDT = await tx.currencyInventory.findUnique({ where: { currencyCode: toCurrency } });
+      if (!invUSDT) {
+        invUSDT = await tx.currencyInventory.create({ data: { currencyCode: toCurrency, cashBalance: 0, bankBalance: 0 } });
+      }
+      const newBuyBal = invUSDT[buyMethodField] + usdtAmount;
+      const newSellBal = Math.max(0, invUSDT[sellMethodField] - usdtAmount);
+      await tx.currencyInventory.update({
+        where: { currencyCode: toCurrency },
+        data: {
+          [buyMethodField]: Number(newBuyBal.toFixed(2)),
+          [sellMethodField]: Number(newSellBal.toFixed(2)),
+        },
+      });
+    }
+
+    return {
+      buyTransaction,
+      sellTransaction,
+      grossProfitINR,
+      grossProfitUSDT,
+      spreadPerUSDT: Number((sellRate - buyRate).toFixed(4)),
+    };
+  });
+}

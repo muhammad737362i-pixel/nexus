@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import {
   Receipt,
   Search,
   Filter,
   ArrowDownLeft,
   ArrowUpRight,
+  ArrowLeftRight,
   Printer,
   Download,
   X,
@@ -373,7 +375,13 @@ export default function TransactionsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Link
+            href="/trade"
+            className="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl font-bold text-xs flex items-center gap-2 shadow-md shadow-indigo-600/30 transition"
+          >
+            <ArrowLeftRight className="w-4 h-4" /> Record Trade Deal
+          </Link>
           {hasActiveFilters && (
             <button
               onClick={resetAllFilters}

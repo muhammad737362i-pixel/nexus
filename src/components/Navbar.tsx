@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowDownLeft, ArrowUpRight, SlidersHorizontal, RefreshCw } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, SlidersHorizontal, RefreshCw } from 'lucide-react';
 
 export function Navbar() {
   const [rates, setRates] = useState<any[]>([]);
@@ -61,26 +61,33 @@ export function Navbar() {
       </div>
 
       {/* Quick Trade Action Buttons */}
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2">
+        <Link
+          href="/trade"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500 text-xs font-bold shadow-md shadow-indigo-600/20 transition"
+        >
+          <ArrowLeftRight className="w-3.5 h-3.5" /> Trade Deal
+        </Link>
+
         <Link
           href="/buying"
-          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-600/30 text-xs font-semibold transition"
+          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-600/30 text-xs font-semibold transition"
         >
           <ArrowDownLeft className="w-3.5 h-3.5" /> Buy
         </Link>
 
         <Link
           href="/selling"
-          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-amber-600/20 text-amber-300 border border-amber-500/30 hover:bg-amber-600/30 text-xs font-semibold transition"
+          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-600/20 text-amber-300 border border-amber-500/30 hover:bg-amber-600/30 text-xs font-semibold transition"
         >
           <ArrowUpRight className="w-3.5 h-3.5" /> Sell
         </Link>
 
         <Link
           href="/rates"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 text-white hover:bg-indigo-500 text-xs font-semibold shadow-md shadow-indigo-600/20 transition"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold transition"
         >
-          <SlidersHorizontal className="w-3.5 h-3.5" /> Custom Rates
+          <SlidersHorizontal className="w-3.5 h-3.5" /> Rates
         </Link>
       </div>
     </header>

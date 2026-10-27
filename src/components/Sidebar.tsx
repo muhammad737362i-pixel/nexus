@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   ArrowUpRight,
   ArrowDownLeft,
+  ArrowLeftRight,
   SlidersHorizontal,
   Users,
   Building2,
@@ -29,8 +30,7 @@ const navItems = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Wallet & Capital', href: '/wallet', icon: Wallet, badge: 'Main Bal' },
   { name: 'Payments Hub', href: '/payments', icon: Banknote },
-  { name: 'Selling', href: '/selling', icon: ArrowUpRight, badge: 'Express' },
-  { name: 'Buying', href: '/buying', icon: ArrowDownLeft, badge: 'Express' },
+  { name: 'Trade Terminal', href: '/trade', icon: ArrowLeftRight, badge: '2-in-1' },
   { name: 'Rates Setup', href: '/rates', icon: SlidersHorizontal, highlight: true },
   { name: 'Customers', href: '/customers', icon: Users },
   { name: 'Bankers', href: '/bankers', icon: Building2 },
@@ -109,7 +109,9 @@ export function Sidebar() {
         {/* Navigation Menu */}
         <nav className="p-3 space-y-1 overflow-y-auto max-h-[calc(100vh-230px)]">
           {navItems.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive =
+              pathname === item.href ||
+              (item.href === '/trade' && (pathname === '/buying' || pathname === '/selling'));
             const Icon = item.icon;
 
             return (

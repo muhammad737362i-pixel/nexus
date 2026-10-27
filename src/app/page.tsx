@@ -6,6 +6,7 @@ import {
   TrendingUp,
   ArrowDownLeft,
   ArrowUpRight,
+  ArrowLeftRight,
   Users,
   Building2,
   DollarSign,
@@ -159,26 +160,32 @@ export default function Dashboard() {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <Link
+            href="/trade"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition"
+          >
+            <ArrowLeftRight className="w-4 h-4" /> Record Trade Deal (2-in-1)
+          </Link>
+          <Link
             href="/wallet"
-            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/20 transition"
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold border border-slate-700 transition"
           >
             <Wallet className="w-4 h-4" /> Wallet & Capital
           </Link>
           <Link
             href="/payments"
-            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-lg shadow-purple-600/20 transition"
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 text-xs font-semibold transition"
           >
             <Banknote className="w-4 h-4" /> Payments Hub
           </Link>
           <Link
             href="/buying"
-            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-lg shadow-emerald-600/20 transition"
+            className="hidden sm:flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition"
           >
             <ArrowDownLeft className="w-4 h-4" /> Buy Trade
           </Link>
           <Link
             href="/selling"
-            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold shadow-lg shadow-amber-600/20 transition"
+            className="hidden sm:flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 text-xs font-semibold transition"
           >
             <ArrowUpRight className="w-4 h-4" /> Sell Trade
           </Link>
