@@ -50,9 +50,9 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
   const [assetCurrency, setAssetCurrency] = useState('USDT');
   const [fiatCurrency, setFiatCurrency] = useState('INR');
 
-  // Trade Amount Currency Mode & Value (Default: INR)
+  // Trade Amount Currency Mode & Value (Default: INR, starts empty/0)
   const [inputCurrencyMode, setInputCurrencyMode] = useState<'INR' | 'USDT'>('INR');
-  const [amountInput, setAmountInput] = useState<string>('100000');
+  const [amountInput, setAmountInput] = useState<string>('');
 
   // Handle switching between INR and USDT without losing equivalent value
   const handleCurrencyModeChange = (newMode: 'INR' | 'USDT') => {
@@ -304,6 +304,7 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
             usdtAmount: effectiveUSDT,
           });
           setCustomDateTime(getWorkingDateTimeISO());
+          setAmountInput('');
         } else {
           setErrorMsg(json.error || 'Failed to record transaction deal');
         }
@@ -345,6 +346,7 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
             customerName: selectedCustomer?.name,
           });
           setCustomDateTime(getWorkingDateTimeISO());
+          setAmountInput('');
         } else {
           setErrorMsg(json.error || 'Failed to execute buy transaction');
         }
@@ -386,6 +388,7 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
             bankerName: selectedBanker?.name,
           });
           setCustomDateTime(getWorkingDateTimeISO());
+          setAmountInput('');
         } else {
           setErrorMsg(json.error || 'Failed to execute sell transaction');
         }
@@ -717,7 +720,7 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
                   step="any"
                   value={amountInput}
                   onChange={(e) => setAmountInput(e.target.value)}
-                  placeholder={inputCurrencyMode === 'INR' ? 'e.g. 100000' : 'e.g. 1000'}
+                  placeholder="0"
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-8 pr-14 py-3 text-white font-extrabold text-base focus:outline-none focus:border-indigo-500"
                 />
                 <span className="absolute right-4 top-3.5 text-xs font-bold text-slate-400 pointer-events-none select-none">
