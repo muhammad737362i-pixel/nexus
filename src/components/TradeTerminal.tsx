@@ -13,7 +13,6 @@ import {
   RefreshCw,
   Calendar,
   Receipt,
-  Printer,
   DollarSign,
   TrendingUp,
   Percent,
@@ -21,6 +20,9 @@ import {
   Building2,
   Users,
   Wallet,
+  Settings2,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { getWorkingDateTimeISO } from '@/lib/dateUtils';
 
@@ -44,38 +46,34 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [selectedBankerId, setSelectedBankerId] = useState('');
 
-  // Asset & Currency
+  // Asset & Fiat
   const [assetCurrency, setAssetCurrency] = useState('USDT');
   const [fiatCurrency, setFiatCurrency] = useState('INR');
 
-  // Volume
+  // Trade Volume (USDT)
   const [usdtAmount, setUsdtAmount] = useState<string>('1000');
 
-  // Buy Leg State (Customer)
+  // Rates (Auto-fetched from Rates Setup for INR)
   const [buyRate, setBuyRate] = useState<string>('88.50');
-  const [isCustomBuyRate, setIsCustomBuyRate] = useState<boolean>(false);
-  const [buyPaymentMethod, setBuyPaymentMethod] = useState<'CASH' | 'BANK'>('CASH');
-  const [buyAmountINR, setBuyAmountINR] = useState<string>('88500');
-  const [buyFee, setBuyFee] = useState<string>('0');
-  const [buyNotes, setBuyNotes] = useState('');
-
-  // Sell Leg State (Banker)
   const [sellRate, setSellRate] = useState<string>('89.20');
+  const [isCustomBuyRate, setIsCustomBuyRate] = useState<boolean>(false);
   const [isCustomSellRate, setIsCustomSellRate] = useState<boolean>(false);
-  const [sellPaymentMethod, setSellPaymentMethod] = useState<'CASH' | 'BANK'>('BANK');
-  const [sellAmountINR, setSellAmountINR] = useState<string>('89200');
-  const [sellFee, setSellFee] = useState<string>('0');
-  const [sellNotes, setSellNotes] = useState('');
+  const [showRateOverrides, setShowRateOverrides] = useState<boolean>(false);
 
-  // Global Deal Notes & Date
-  const [dealNotes, setDealNotes] = useState('');
+  // Settlement Method
+  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'BANK'>('CASH');
+  const [customSettlementSplit, setCustomSettlementSplit] = useState<boolean>(false);
+  const [buyPaymentMethod, setBuyPaymentMethod] = useState<'CASH' | 'BANK'>('CASH');
+  const [sellPaymentMethod, setSellPaymentMethod] = useState<'CASH' | 'BANK'>('CASH');
+
+  // Single Notes & Date
+  const [notes, setNotes] = useState('');
   const [customDateTime, setCustomDateTime] = useState<string>('');
 
   // UI States
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [buyRateLoading, setBuyRateLoading] = useState(false);
-  const [sellRateLoading, setSellRateLoading] = useState(false);
+  const [ratesLoading, setRatesLoading] = useState(false);
   const [successReceipts, setSuccessReceipts] = useState<any | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -83,7 +81,15 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
     setCustomDateTime(getWorkingDateTimeISO());
   }, []);
 
-  // Load parties and currencies
+  // Sync split payment methods with primary paymentMethod if split is off
+  useEffect(() => {
+    if (!customSettlementSplit) {
+      setBuyPaymentMethod(paymentMethod);
+      setSellPaymentMethod(paymentMethod);
+    }
+  }, [paymentMethod, customSettlementSplit]);
+
+  // Load initial parties and currencies
   useEffect(() => {
     async function loadData() {
       try {
@@ -113,11 +119,15 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
 
         if (currJson.success && currJson.currencies) {
           setCurrencies(currJson.currencies);
+          const inr = currJson.currencies.find((c: any) => c.code === 'INR');
+          if (inr) {
+            setFiatCurrency(inr.code);
+            setBuyRate(inr.defaultBuyRate?.toString() || '88.50');
+            setSellRate(inr.defaultSellRate?.toString() || '89.20');
+          }
           const usdt = currJson.currencies.find((c: any) => c.code === 'USDT' || c.code === 'USD');
           if (usdt) {
             setAssetCurrency(usdt.code);
-            setBuyRate(usdt.defaultBuyRate?.toString() || '88.50');
-            setSellRate(usdt.defaultSellRate?.toString() || '89.20');
           }
         }
       } catch (e) {
@@ -129,119 +139,59 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
     loadData();
   }, []);
 
-  // Fetch customer rate
+  // Automatically fetch customer's configured Buy Rate whenever customer changes
   useEffect(() => {
-    if (!selectedCustomerId || !assetCurrency) return;
+    if (!selectedCustomerId || !fiatCurrency) return;
     async function fetchCustomerRate() {
-      setBuyRateLoading(true);
+      setRatesLoading(true);
       try {
-        const res = await fetch(`/api/rates?partyId=${selectedCustomerId}&currencyCode=${assetCurrency}`);
+        const res = await fetch(`/api/rates?partyId=${selectedCustomerId}&currencyCode=${fiatCurrency}`);
         const json = await res.json();
         if (json.success && json.rateInfo) {
-          const rateVal = json.rateInfo.appliedBuyRate.toString();
-          setBuyRate(rateVal);
+          setBuyRate(json.rateInfo.appliedBuyRate.toString());
           setIsCustomBuyRate(json.rateInfo.isCustom);
-          const numU = parseFloat(usdtAmount) || 0;
-          const numR = parseFloat(rateVal) || 0;
-          setBuyAmountINR((numU * numR).toFixed(2));
         }
       } catch (e) {
         console.error(e);
       } finally {
-        setBuyRateLoading(false);
+        setRatesLoading(false);
       }
     }
     fetchCustomerRate();
-  }, [selectedCustomerId, assetCurrency]);
+  }, [selectedCustomerId, fiatCurrency]);
 
-  // Fetch banker rate
+  // Automatically fetch banker's configured Sell Rate whenever banker changes
   useEffect(() => {
-    if (!selectedBankerId || !assetCurrency) return;
+    if (!selectedBankerId || !fiatCurrency) return;
     async function fetchBankerRate() {
-      setSellRateLoading(true);
+      setRatesLoading(true);
       try {
-        const res = await fetch(`/api/rates?partyId=${selectedBankerId}&currencyCode=${assetCurrency}`);
+        const res = await fetch(`/api/rates?partyId=${selectedBankerId}&currencyCode=${fiatCurrency}`);
         const json = await res.json();
         if (json.success && json.rateInfo) {
-          const rateVal = json.rateInfo.appliedSellRate.toString();
-          setSellRate(rateVal);
+          setSellRate(json.rateInfo.appliedSellRate.toString());
           setIsCustomSellRate(json.rateInfo.isCustom);
-          const numU = parseFloat(usdtAmount) || 0;
-          const numR = parseFloat(rateVal) || 0;
-          setSellAmountINR((numU * numR).toFixed(2));
         }
       } catch (e) {
         console.error(e);
       } finally {
-        setSellRateLoading(false);
+        setRatesLoading(false);
       }
     }
     fetchBankerRate();
-  }, [selectedBankerId, assetCurrency]);
-
-  // Handle USDT amount changes
-  const handleUsdtChange = (val: string) => {
-    setUsdtAmount(val);
-    const numU = parseFloat(val) || 0;
-    const numBuyR = parseFloat(buyRate) || 0;
-    const numSellR = parseFloat(sellRate) || 0;
-    setBuyAmountINR(numU > 0 && numBuyR > 0 ? (numU * numBuyR).toFixed(2) : '');
-    setSellAmountINR(numU > 0 && numSellR > 0 ? (numU * numSellR).toFixed(2) : '');
-  };
-
-  // Handle Buy Rate changes
-  const handleBuyRateChange = (val: string) => {
-    setBuyRate(val);
-    const numU = parseFloat(usdtAmount) || 0;
-    const numR = parseFloat(val) || 0;
-    if (numU > 0 && numR > 0) {
-      setBuyAmountINR((numU * numR).toFixed(2));
-    }
-  };
-
-  // Handle Sell Rate changes
-  const handleSellRateChange = (val: string) => {
-    setSellRate(val);
-    const numU = parseFloat(usdtAmount) || 0;
-    const numR = parseFloat(val) || 0;
-    if (numU > 0 && numR > 0) {
-      setSellAmountINR((numU * numR).toFixed(2));
-    }
-  };
-
-  // Handle Buy Amount INR change (adjusts USDT or Rate)
-  const handleBuyAmountChange = (val: string) => {
-    setBuyAmountINR(val);
-    const numINR = parseFloat(val) || 0;
-    const numR = parseFloat(buyRate) || 0;
-    if (mode === 'BUY' && numINR > 0 && numR > 0) {
-      setUsdtAmount((numINR / numR).toFixed(2));
-    }
-  };
-
-  // Handle Sell Amount INR change
-  const handleSellAmountChange = (val: string) => {
-    setSellAmountINR(val);
-    const numINR = parseFloat(val) || 0;
-    const numR = parseFloat(sellRate) || 0;
-    if (mode === 'SELL' && numINR > 0 && numR > 0) {
-      setUsdtAmount((numINR / numR).toFixed(2));
-    }
-  };
+  }, [selectedBankerId, fiatCurrency]);
 
   // Calculations
   const numUsdt = parseFloat(usdtAmount) || 0;
   const numBuyRate = parseFloat(buyRate) || 0;
   const numSellRate = parseFloat(sellRate) || 0;
-  const numBuyINR = parseFloat(buyAmountINR) || (numUsdt * numBuyRate);
-  const numSellINR = parseFloat(sellAmountINR) || (numUsdt * numSellRate);
-  const numBuyFee = parseFloat(buyFee) || 0;
-  const numSellFee = parseFloat(sellFee) || 0;
 
-  const spreadPerUnit = numSellRate - numBuyRate;
-  const grossProfitINR = numSellINR - numBuyINR + numBuyFee + numSellFee;
-  const grossProfitUSDT = numSellRate > 0 ? grossProfitINR / numSellRate : 0;
-  const profitMarginPercent = numBuyINR > 0 ? (grossProfitINR / numBuyINR) * 100 : 0;
+  const customerPayoutINR = Number((numUsdt * numBuyRate).toFixed(2));
+  const bankerCollectionINR = Number((numUsdt * numSellRate).toFixed(2));
+  const spreadPerUnit = Number((numSellRate - numBuyRate).toFixed(3));
+  const grossProfitINR = Number((bankerCollectionINR - customerPayoutINR).toFixed(2));
+  const grossProfitUSDT = numSellRate > 0 ? Number((grossProfitINR / numSellRate).toFixed(2)) : 0;
+  const profitMarginPercent = customerPayoutINR > 0 ? (grossProfitINR / customerPayoutINR) * 100 : 0;
 
   // Selected party objects
   const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
@@ -253,17 +203,28 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
     setErrorMsg('');
 
     if (mode === 'DEAL') {
-      if (!selectedCustomerId || !selectedBankerId) {
-        setErrorMsg('Please select both a Customer and a Banker for the deal');
+      if (!selectedCustomerId) {
+        setErrorMsg('Please select a Customer');
         return;
       }
-      if (numUsdt <= 0 || numBuyRate <= 0 || numSellRate <= 0) {
-        setErrorMsg('Please enter valid USDT volume and rates');
+      if (!selectedBankerId) {
+        setErrorMsg('Please select a Banker');
+        return;
+      }
+      if (numUsdt <= 0) {
+        setErrorMsg('Please enter a valid trade amount in USDT');
+        return;
+      }
+      if (numBuyRate <= 0 || numSellRate <= 0) {
+        setErrorMsg('Valid Buy Rate and Sell Rate are required');
         return;
       }
 
       setSubmitting(true);
       try {
+        const effectiveBuyMethod = customSettlementSplit ? buyPaymentMethod : paymentMethod;
+        const effectiveSellMethod = customSettlementSplit ? sellPaymentMethod : paymentMethod;
+
         const res = await fetch('/api/transactions/deal', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -275,13 +236,11 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
             usdtAmount: numUsdt,
             buyRate: numBuyRate,
             sellRate: numSellRate,
-            buyAmountINR: numBuyINR,
-            sellAmountINR: numSellINR,
-            buyPaymentMethod,
-            sellPaymentMethod,
-            buyFee: numBuyFee,
-            sellFee: numSellFee,
-            notes: dealNotes || buyNotes || sellNotes || undefined,
+            buyAmountINR: customerPayoutINR,
+            sellAmountINR: bankerCollectionINR,
+            buyPaymentMethod: effectiveBuyMethod,
+            sellPaymentMethod: effectiveSellMethod,
+            notes: notes || undefined,
             createdAt: customDateTime || undefined,
           }),
         });
@@ -297,10 +256,13 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
             spreadPerUSDT: json.spreadPerUSDT,
             customerName: selectedCustomer?.name,
             bankerName: selectedBanker?.name,
+            payoutINR: customerPayoutINR,
+            collectionINR: bankerCollectionINR,
+            usdtAmount: numUsdt,
           });
           setCustomDateTime(getWorkingDateTimeISO());
         } else {
-          setErrorMsg(json.error || 'Failed to record deal transactions');
+          setErrorMsg(json.error || 'Failed to record transaction deal');
         }
       } catch (err: any) {
         setErrorMsg(err.message || 'Error submitting deal');
@@ -308,7 +270,7 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
         setSubmitting(false);
       }
     } else if (mode === 'BUY') {
-      if (!selectedCustomerId || numBuyINR <= 0 || numBuyRate <= 0) {
+      if (!selectedCustomerId || customerPayoutINR <= 0 || numBuyRate <= 0) {
         setErrorMsg('Please enter valid buy parameters');
         return;
       }
@@ -323,11 +285,11 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
             partyId: selectedCustomerId,
             fromCurrency: fiatCurrency,
             toCurrency: assetCurrency,
-            amountGiven: numBuyINR,
+            amountGiven: customerPayoutINR,
             appliedRate: numBuyRate,
-            fee: numBuyFee,
-            paymentMethod: buyPaymentMethod,
-            notes: buyNotes || dealNotes || undefined,
+            fee: 0,
+            paymentMethod,
+            notes: notes || undefined,
             createdAt: customDateTime || undefined,
           }),
         });
@@ -349,7 +311,7 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
         setSubmitting(false);
       }
     } else if (mode === 'SELL') {
-      if (!selectedBankerId || numSellINR <= 0 || numSellRate <= 0) {
+      if (!selectedBankerId || bankerCollectionINR <= 0 || numSellRate <= 0) {
         setErrorMsg('Please enter valid sell parameters');
         return;
       }
@@ -364,11 +326,11 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
             partyId: selectedBankerId,
             fromCurrency: fiatCurrency,
             toCurrency: assetCurrency,
-            amountGiven: numSellINR,
+            amountGiven: bankerCollectionINR,
             appliedRate: numSellRate,
-            fee: numSellFee,
-            paymentMethod: sellPaymentMethod,
-            notes: sellNotes || dealNotes || undefined,
+            fee: 0,
+            paymentMethod,
+            notes: notes || undefined,
             createdAt: customDateTime || undefined,
           }),
         });
@@ -401,40 +363,42 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
   }
 
   return (
-    <div className="w-full space-y-6 max-w-7xl mx-auto pb-12">
+    <div className="w-full space-y-6 max-w-4xl mx-auto pb-12">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-              <Layers className="w-5 h-5" />
+              <ArrowLeftRight className="w-5 h-5" />
             </div>
-            Unified Trade Terminal
+            {mode === 'DEAL' ? 'New Trade Transaction' : mode === 'BUY' ? 'Buy Currency' : 'Sell Currency'}
           </h1>
           <p className="text-slate-400 text-sm mt-1">
-            Record paired 2-in-1 exchange deals or single orders with live rate calculations and profit analytics.
+            {mode === 'DEAL'
+              ? 'Select Customer and Banker to record the trade deal. Rates are auto-applied from the Rates Setup.'
+              : 'Record a single transaction leg with configured party rates.'}
           </p>
         </div>
 
-        {/* Mode Selector Tabs */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-900 border border-slate-800 rounded-xl">
+        {/* Mode Switcher */}
+        <div className="flex items-center gap-1 p-1 bg-slate-900 border border-slate-800 rounded-xl">
           <button
             type="button"
             onClick={() => setMode('DEAL')}
-            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
               mode === 'DEAL'
-                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-600/30'
+                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            <ArrowLeftRight className="w-3.5 h-3.5" /> Complete Deal (2-in-1)
+            <ArrowLeftRight className="w-3.5 h-3.5" /> Deal (Customer + Banker)
           </button>
           <button
             type="button"
             onClick={() => setMode('BUY')}
-            className={`px-3 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
               mode === 'BUY'
-                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                ? 'bg-emerald-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -443,9 +407,9 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
           <button
             type="button"
             onClick={() => setMode('SELL')}
-            className={`px-3 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
               mode === 'SELL'
-                ? 'bg-amber-600 text-white shadow-md shadow-amber-600/30'
+                ? 'bg-amber-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -454,7 +418,7 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
         </div>
       </div>
 
-      {/* Success Notification Banner / Modal */}
+      {/* Success Notification Banner */}
       {successReceipts && (
         <div className="glass-card rounded-2xl p-6 border border-emerald-500/40 bg-emerald-950/30 space-y-4 animate-fadeIn shadow-xl">
           <div className="flex items-center justify-between">
@@ -463,100 +427,62 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
               <div>
                 <h3 className="font-bold text-lg text-emerald-300">
                   {successReceipts.type === 'DEAL'
-                    ? '2-in-1 Trade Deal Executed Successfully!'
+                    ? 'Transaction Deal Recorded Successfully!'
                     : successReceipts.type === 'BUY'
-                    ? 'Buy Order Executed Successfully!'
-                    : 'Sell Order Executed Successfully!'}
+                    ? 'Buy Transaction Executed!'
+                    : 'Sell Transaction Executed!'}
                 </h3>
                 <p className="text-xs text-slate-300">
                   {successReceipts.type === 'DEAL'
-                    ? 'Two linked transactions were recorded into the master ledger with updated inventories.'
-                    : 'Transaction was successfully logged and inventory balances adjusted.'}
+                    ? 'Customer Buy and Banker Sell transactions were added automatically.'
+                    : 'Transaction was added to the master ledger.'}
                 </p>
               </div>
             </div>
             <button
               onClick={() => setSuccessReceipts(null)}
-              className="text-xs px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white"
+              className="text-xs px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white transition"
             >
               Dismiss
             </button>
           </div>
 
-          {/* Dual Receipts Card */}
-          {successReceipts.type === 'DEAL' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Buy Receipt Box */}
-              <div className="bg-slate-900/90 p-4 rounded-xl border border-emerald-500/30 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
-                    <ArrowDownLeft className="w-3.5 h-3.5" /> Buy Leg (Customer)
-                  </span>
-                  <span className="font-mono text-xs font-bold text-white bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
-                    {successReceipts.buyTransaction.receiptNo}
-                  </span>
+          {/* Deal Confirmation Summary */}
+          {successReceipts.type === 'DEAL' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-900/90 p-4 rounded-xl border border-slate-800 text-xs">
+              <div className="space-y-1">
+                <span className="text-slate-400 block text-[11px] font-semibold">Customer (Buy Leg)</span>
+                <div className="font-bold text-white text-sm">{successReceipts.customerName}</div>
+                <div className="text-emerald-400 font-mono font-bold">
+                  Paid ₹{successReceipts.payoutINR.toLocaleString()} for {successReceipts.usdtAmount} USDT
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <span className="text-slate-500 block text-[10px]">Customer</span>
-                    <span className="font-bold text-white">{successReceipts.customerName}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block text-[10px]">Payout (INR)</span>
-                    <span className="font-bold text-emerald-400">₹{successReceipts.buyTransaction.amountGiven.toLocaleString()}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block text-[10px]">Applied Buy Rate</span>
-                    <span className="font-bold text-amber-300">₹{successReceipts.buyTransaction.appliedRate}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block text-[10px]">USDT Received</span>
-                    <span className="font-bold text-white">{successReceipts.buyTransaction.amountReceived} USDT</span>
-                  </div>
+                <div className="text-slate-500 font-mono text-[11px]">
+                  Receipt: <span className="text-white">{successReceipts.buyTransaction.receiptNo}</span>
                 </div>
               </div>
 
-              {/* Sell Receipt Box */}
-              <div className="bg-slate-900/90 p-4 rounded-xl border border-amber-500/30 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">
-                    <ArrowUpRight className="w-3.5 h-3.5" /> Sell Leg (Banker)
-                  </span>
-                  <span className="font-mono text-xs font-bold text-white bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
-                    {successReceipts.sellTransaction.receiptNo}
-                  </span>
+              <div className="space-y-1 sm:border-l sm:border-slate-800 sm:pl-4">
+                <span className="text-slate-400 block text-[11px] font-semibold">Banker (Sell Leg)</span>
+                <div className="font-bold text-white text-sm">{successReceipts.bankerName}</div>
+                <div className="text-amber-400 font-mono font-bold">
+                  Collected ₹{successReceipts.collectionINR.toLocaleString()} for {successReceipts.usdtAmount} USDT
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <span className="text-slate-500 block text-[10px]">Banker</span>
-                    <span className="font-bold text-white">{successReceipts.bankerName}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block text-[10px]">Collection (INR)</span>
-                    <span className="font-bold text-amber-400">₹{successReceipts.sellTransaction.amountGiven.toLocaleString()}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block text-[10px]">Applied Sell Rate</span>
-                    <span className="font-bold text-amber-300">₹{successReceipts.sellTransaction.appliedRate}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block text-[10px]">USDT Delivered</span>
-                    <span className="font-bold text-white">{successReceipts.sellTransaction.amountReceived} USDT</span>
-                  </div>
+                <div className="text-slate-500 font-mono text-[11px]">
+                  Receipt: <span className="text-white">{successReceipts.sellTransaction.receiptNo}</span>
                 </div>
               </div>
-            </div>
-          ) : (
-            <div className="bg-slate-900/90 p-4 rounded-xl border border-slate-800 text-xs">
-              <span className="text-slate-400">Receipt No: </span>
-              <span className="font-mono font-bold text-white">
-                {successReceipts.buyTransaction?.receiptNo || successReceipts.sellTransaction?.receiptNo}
-              </span>
+
+              <div className="sm:col-span-2 pt-2 border-t border-slate-800 flex items-center justify-between">
+                <span className="text-slate-400 text-xs">Net Deal Profit:</span>
+                <span className="font-extrabold text-emerald-400 text-sm">
+                  +₹{successReceipts.grossProfitINR.toLocaleString()} INR (+${successReceipts.grossProfitUSDT} USDT)
+                </span>
+              </div>
             </div>
           )}
 
           {/* Action Buttons */}
-          <div className="flex flex-wrap gap-3 pt-2">
+          <div className="flex flex-wrap gap-3 pt-1">
             <button
               onClick={() => setSuccessReceipts(null)}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition"
@@ -580,112 +506,36 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
         </div>
       )}
 
-      {/* Main Trade Form */}
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Global Deal Settings Banner */}
-        <div className="glass-card rounded-2xl p-5 border border-slate-800 bg-slate-900/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-              <DollarSign className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-xs font-bold text-white uppercase tracking-wider block">
-                Trade Asset Volume ({assetCurrency})
-              </span>
-              <p className="text-[11px] text-slate-400">
-                {mode === 'DEAL'
-                  ? 'Shared USDT volume exchanged between Customer and Banker.'
-                  : `Amount of ${assetCurrency} for this transaction.`}
-              </p>
-            </div>
+      {/* SINGLE UNIFIED TRANSACTION FORM */}
+      <form onSubmit={handleSubmit} className="glass-card rounded-2xl p-6 sm:p-8 border border-slate-800 space-y-6 shadow-2xl">
+        {/* Step 1: Select Parties */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 pb-2 border-b border-slate-800/80">
+            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold">1</span>
+            <h2 className="text-sm font-bold text-white uppercase tracking-wider">Select Counterparties</h2>
           </div>
 
-          <div className="flex flex-wrap items-center gap-4">
-            {/* USDT Input */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400 font-semibold">{assetCurrency}:</span>
-              <div className="relative">
-                <input
-                  type="number"
-                  step="any"
-                  value={usdtAmount}
-                  onChange={(e) => handleUsdtChange(e.target.value)}
-                  placeholder="e.g. 1000"
-                  className="w-36 bg-slate-950 border border-indigo-500/50 rounded-xl px-3 py-2 text-white font-extrabold text-sm focus:outline-none focus:border-indigo-400"
-                />
-              </div>
-            </div>
-
-            {/* Currency Selector */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400 font-semibold">Asset:</span>
-              <select
-                value={assetCurrency}
-                onChange={(e) => setAssetCurrency(e.target.value)}
-                className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold text-xs focus:outline-none focus:border-indigo-500"
-              >
-                {currencies
-                  .filter((c) => !c.isBase)
-                  .map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.code}
-                    </option>
-                  ))}
-              </select>
-            </div>
-
-            {/* Date & Time Picker */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-indigo-300 font-semibold flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5" /> Date:
-              </span>
-              <input
-                type="datetime-local"
-                value={customDateTime}
-                onChange={(e) => setCustomDateTime(e.target.value)}
-                className="bg-slate-950 border border-indigo-500/40 rounded-xl px-3 py-2 text-indigo-200 font-bold text-xs focus:outline-none focus:border-indigo-400 cursor-pointer"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* 2-COLUMN TRANSACTION CARDS */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* LEFT COLUMN: BUY LEG (CUSTOMER) */}
-          {(mode === 'DEAL' || mode === 'BUY') && (
-            <div className="glass-card rounded-2xl p-6 border border-emerald-500/30 bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 space-y-5">
-              {/* Card Header */}
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    <ArrowDownLeft className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                      Buy Leg — Customer
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold">
-                        Payout INR
-                      </span>
-                    </h3>
-                    <p className="text-[11px] text-slate-400">
-                      We buy USDT from customer and pay them INR.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Customer Select */}
+          <div className={`grid grid-cols-1 ${mode === 'DEAL' ? 'sm:grid-cols-2' : ''} gap-4`}>
+            {/* Customer Dropdown */}
+            {(mode === 'DEAL' || mode === 'BUY') && (
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
-                  Select Customer *
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-emerald-400" /> Select Customer *
+                  </label>
+                  {isCustomBuyRate && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30 flex items-center gap-1">
+                      <Sparkles className="w-2.5 h-2.5" /> Custom Rate Active
+                    </span>
+                  )}
+                </div>
                 <select
                   value={selectedCustomerId}
                   onChange={(e) => setSelectedCustomerId(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white text-xs font-semibold focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm font-medium focus:outline-none focus:border-indigo-500"
                 >
                   {customers.length === 0 ? (
-                    <option value="">No customers registered yet</option>
+                    <option value="">No customers found</option>
                   ) : (
                     customers.map((c) => (
                       <option key={c.id} value={c.id}>
@@ -695,154 +545,34 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
                   )}
                 </select>
                 {selectedCustomer && (
-                  <div className="text-[10px] text-slate-400 flex justify-between px-1">
-                    <span>Contact: {selectedCustomer.phone || 'N/A'}</span>
-                    <span>Type: Customer</span>
+                  <div className="text-[11px] text-slate-400 flex justify-between px-1">
+                    <span>Contact: <strong className="text-slate-300">{selectedCustomer.phone || 'N/A'}</strong></span>
+                    <span>Rate Applied: <strong className="text-emerald-400 font-mono">₹{buyRate}</strong></span>
                   </div>
                 )}
               </div>
+            )}
 
-              {/* Buy Settlement Source */}
+            {/* Banker Dropdown */}
+            {(mode === 'DEAL' || mode === 'SELL') && (
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
-                  Payout Settlement Source *
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setBuyPaymentMethod('CASH')}
-                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-2 ${
-                      buyPaymentMethod === 'CASH'
-                        ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    Cash Safe
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBuyPaymentMethod('BANK')}
-                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-2 ${
-                      buyPaymentMethod === 'BANK'
-                        ? 'bg-cyan-600/20 border-cyan-500 text-cyan-300'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    Bank Account
-                  </button>
-                </div>
-              </div>
-
-              {/* Buy Rate & Buy Amount INR */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Applied Buy Rate */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
-                      Buy Rate (₹) *
-                    </label>
-                    {isCustomBuyRate ? (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-bold flex items-center gap-1">
-                        <Sparkles className="w-2.5 h-2.5" /> Custom
-                      </span>
-                    ) : (
-                      <span className="text-[9px] text-slate-500">Base</span>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      step="any"
-                      value={buyRate}
-                      onChange={(e) => handleBuyRateChange(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-amber-300 font-extrabold text-xs focus:outline-none focus:border-amber-500"
-                    />
-                    {buyRateLoading && (
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-slate-500 absolute right-3 top-3" />
-                    )}
-                  </div>
-                </div>
-
-                {/* Buy Amount INR Payout */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
-                    Total INR Payout (₹) *
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <Building2 className="w-4 h-4 text-amber-400" /> Select Banker *
                   </label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={buyAmountINR}
-                    onChange={(e) => handleBuyAmountChange(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white font-extrabold text-xs focus:outline-none focus:border-emerald-500"
-                  />
+                  {isCustomSellRate && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30 flex items-center gap-1">
+                      <Sparkles className="w-2.5 h-2.5" /> Custom Rate Active
+                    </span>
+                  )}
                 </div>
-              </div>
-
-              {/* Fee & Notes */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                    Buy Commission / Fee (₹)
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={buyFee}
-                    onChange={(e) => setBuyFee(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-slate-600"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                    Customer Notes
-                  </label>
-                  <input
-                    type="text"
-                    value={buyNotes}
-                    onChange={(e) => setBuyNotes(e.target.value)}
-                    placeholder="e.g. Cash handed over..."
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-slate-600"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* RIGHT COLUMN: SELL LEG (BANKER) */}
-          {(mode === 'DEAL' || mode === 'SELL') && (
-            <div className="glass-card rounded-2xl p-6 border border-amber-500/30 bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 space-y-5">
-              {/* Card Header */}
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                    <ArrowUpRight className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                      Sell Leg — Banker
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold">
-                        Collect INR
-                      </span>
-                    </h3>
-                    <p className="text-[11px] text-slate-400">
-                      We sell USDT to banker and receive INR from them.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Banker Select */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
-                  Select Banker *
-                </label>
                 <select
                   value={selectedBankerId}
                   onChange={(e) => setSelectedBankerId(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white text-xs font-semibold focus:outline-none focus:border-amber-500"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm font-medium focus:outline-none focus:border-indigo-500"
                 >
                   {bankers.length === 0 ? (
-                    <option value="">No bankers registered yet</option>
+                    <option value="">No bankers found</option>
                   ) : (
                     bankers.map((b) => (
                       <option key={b.id} value={b.id}>
@@ -852,221 +582,305 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
                   )}
                 </select>
                 {selectedBanker && (
-                  <div className="text-[10px] text-slate-400 flex justify-between px-1">
-                    <span>Contact: {selectedBanker.phone || 'N/A'}</span>
-                    <span>Type: Banker</span>
+                  <div className="text-[11px] text-slate-400 flex justify-between px-1">
+                    <span>Contact: <strong className="text-slate-300">{selectedBanker.phone || 'N/A'}</strong></span>
+                    <span>Rate Applied: <strong className="text-amber-400 font-mono">₹{sellRate}</strong></span>
                   </div>
                 )}
               </div>
+            )}
+          </div>
+        </div>
 
-              {/* Sell Settlement Source */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
-                  Collection Settlement Source *
+        {/* Step 2: Trade Amount & Settlement Method */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 pb-2 border-b border-slate-800/80">
+            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold">2</span>
+            <h2 className="text-sm font-bold text-white uppercase tracking-wider">Amount & Settlement</h2>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* USDT Amount Input */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-300 flex items-center gap-1">
+                <DollarSign className="w-4 h-4 text-indigo-400" /> Trade Amount ({assetCurrency}) *
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="any"
+                  value={usdtAmount}
+                  onChange={(e) => setUsdtAmount(e.target.value)}
+                  placeholder="e.g. 1000"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white font-extrabold text-base focus:outline-none focus:border-indigo-500"
+                />
+                <span className="absolute right-4 top-3.5 text-xs font-bold text-slate-500">
+                  {assetCurrency}
+                </span>
+              </div>
+            </div>
+
+            {/* Settlement Method */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-300 flex items-center gap-1">
+                  <Wallet className="w-4 h-4 text-indigo-400" /> Settlement Source *
                 </label>
-                <div className="grid grid-cols-2 gap-3">
+                {mode === 'DEAL' && (
                   <button
                     type="button"
-                    onClick={() => setSellPaymentMethod('CASH')}
-                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-2 ${
-                      sellPaymentMethod === 'CASH'
-                        ? 'bg-amber-600/20 border-amber-500 text-amber-300'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                    onClick={() => setCustomSettlementSplit(!customSettlementSplit)}
+                    className="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+                  >
+                    <Settings2 className="w-3 h-3" />
+                    {customSettlementSplit ? 'Use Same Account' : 'Split Cash / Bank'}
+                  </button>
+                )}
+              </div>
+
+              {!customSettlementSplit ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('CASH')}
+                    className={`py-3 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-2 ${
+                      paymentMethod === 'CASH'
+                        ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300 shadow-sm'
+                        : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
                     }`}
                   >
                     Cash Safe
                   </button>
                   <button
                     type="button"
-                    onClick={() => setSellPaymentMethod('BANK')}
-                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-2 ${
-                      sellPaymentMethod === 'BANK'
-                        ? 'bg-cyan-600/20 border-cyan-500 text-cyan-300'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                    onClick={() => setPaymentMethod('BANK')}
+                    className={`py-3 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-2 ${
+                      paymentMethod === 'BANK'
+                        ? 'bg-cyan-600/20 border-cyan-500 text-cyan-300 shadow-sm'
+                        : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
                     }`}
                   >
                     Bank Account
                   </button>
                 </div>
-              </div>
-
-              {/* Sell Rate & Sell Amount INR */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Applied Sell Rate */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
-                      Sell Rate (₹) *
-                    </label>
-                    {isCustomSellRate ? (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-bold flex items-center gap-1">
-                        <Sparkles className="w-2.5 h-2.5" /> Custom
-                      </span>
-                    ) : (
-                      <span className="text-[9px] text-slate-500">Base</span>
-                    )}
+              ) : (
+                <div className="grid grid-cols-2 gap-2 p-2 bg-slate-950/80 rounded-xl border border-slate-800">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block mb-1">Customer Payout:</span>
+                    <select
+                      value={buyPaymentMethod}
+                      onChange={(e: any) => setBuyPaymentMethod(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white"
+                    >
+                      <option value="CASH">Cash Safe</option>
+                      <option value="BANK">Bank Account</option>
+                    </select>
                   </div>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      step="any"
-                      value={sellRate}
-                      onChange={(e) => handleSellRateChange(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-amber-300 font-extrabold text-xs focus:outline-none focus:border-amber-500"
-                    />
-                    {sellRateLoading && (
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-slate-500 absolute right-3 top-3" />
-                    )}
+                  <div>
+                    <span className="text-[10px] text-slate-400 block mb-1">Banker Collection:</span>
+                    <select
+                      value={sellPaymentMethod}
+                      onChange={(e: any) => setSellPaymentMethod(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white"
+                    >
+                      <option value="BANK">Bank Account</option>
+                      <option value="CASH">Cash Safe</option>
+                    </select>
                   </div>
                 </div>
-
-                {/* Sell Amount INR Collection */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
-                    Total INR Collection (₹) *
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={sellAmountINR}
-                    onChange={(e) => handleSellAmountChange(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white font-extrabold text-xs focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-              </div>
-
-              {/* Fee & Notes */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                    Sell Commission / Fee (₹)
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={sellFee}
-                    onChange={(e) => setSellFee(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-slate-600"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                    Banker Notes
-                  </label>
-                  <input
-                    type="text"
-                    value={sellNotes}
-                    onChange={(e) => setSellNotes(e.target.value)}
-                    placeholder="e.g. Bank IMPS reference..."
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-slate-600"
-                  />
-                </div>
-              </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
 
-        {/* LIVE DEAL METRICS & EXECUTE BAR */}
-        <div className="glass-card rounded-2xl p-6 border border-indigo-500/40 bg-gradient-to-r from-slate-950 via-indigo-950/40 to-slate-950 space-y-4 shadow-2xl">
-          {mode === 'DEAL' && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pb-4 border-b border-slate-800/80">
-              {/* Spread per USDT */}
-              <div>
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                  Net Spread per USDT
-                </span>
-                <div className={`text-xl font-extrabold mt-1 ${spreadPerUnit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {spreadPerUnit >= 0 ? '+' : ''}₹{spreadPerUnit.toFixed(3)}
-                </div>
-                <span className="text-[10px] text-slate-500">Sell ₹{numSellRate} - Buy ₹{numBuyRate}</span>
-              </div>
+        {/* Step 3: Automatic Deal Calculation & Rates Display */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
+            <div className="flex items-center gap-2">
+              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold">3</span>
+              <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+                Deal Calculation & Rates
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowRateOverrides(!showRateOverrides)}
+              className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1 transition"
+            >
+              {showRateOverrides ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              {showRateOverrides ? 'Hide Rate Inputs' : 'Edit Rates Manually'}
+            </button>
+          </div>
 
-              {/* Total INR Profit */}
-              <div>
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                  Gross Profit (INR)
-                </span>
-                <div className={`text-xl font-extrabold mt-1 ${grossProfitINR >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {grossProfitINR >= 0 ? '+' : ''}₹{grossProfitINR.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-                <span className="text-[10px] text-slate-500">Margin: {profitMarginPercent.toFixed(2)}%</span>
+          {/* Rate Override Inputs (Optional Toggle) */}
+          {showRateOverrides && (
+            <div className="p-4 bg-slate-950/90 rounded-xl border border-indigo-500/30 grid grid-cols-1 sm:grid-cols-2 gap-4 animate-fadeIn">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-300">
+                  Customer Buy Rate (₹)
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  value={buyRate}
+                  onChange={(e) => setBuyRate(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-amber-300 font-bold text-sm focus:outline-none focus:border-amber-500"
+                />
               </div>
-
-              {/* Total USDT Profit */}
-              <div>
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                  Est. Profit (USDT)
-                </span>
-                <div className={`text-xl font-extrabold mt-1 ${grossProfitUSDT >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {grossProfitUSDT >= 0 ? '+' : ''}${grossProfitUSDT.toFixed(2)} USDT
-                </div>
-                <span className="text-[10px] text-slate-500">at ₹{numSellRate}/USDT</span>
-              </div>
-
-              {/* Net Payout / Collection */}
-              <div>
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                  Trade Net Flow
-                </span>
-                <div className="text-xs text-white font-semibold mt-1">
-                  Pay: <strong className="text-emerald-400">₹{numBuyINR.toLocaleString()}</strong>
-                </div>
-                <div className="text-xs text-white font-semibold">
-                  Collect: <strong className="text-amber-400">₹{numSellINR.toLocaleString()}</strong>
-                </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-300">
+                  Banker Sell Rate (₹)
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  value={sellRate}
+                  onChange={(e) => setSellRate(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-amber-300 font-bold text-sm focus:outline-none focus:border-amber-500"
+                />
               </div>
             </div>
           )}
 
-          {/* Action Row */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
-            <div className="text-xs text-slate-400">
-              {mode === 'DEAL' ? (
-                <>
-                  Executing this will create <strong className="text-emerald-300">Buy Receipt</strong> for {selectedCustomer?.name || 'Customer'} and{' '}
-                  <strong className="text-amber-300">Sell Receipt</strong> for {selectedBanker?.name || 'Banker'} atomically.
-                </>
-              ) : mode === 'BUY' ? (
-                <>Will record single BUY transaction for {selectedCustomer?.name || 'Customer'}.</>
-              ) : (
-                <>Will record single SELL transaction for {selectedBanker?.name || 'Banker'}.</>
-              )}
-            </div>
+          {/* Unified Deal Calculation Card */}
+          <div className="rounded-2xl p-5 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border border-indigo-500/30 space-y-4">
+            {mode === 'DEAL' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {/* Customer Leg Summary */}
+                <div className="space-y-1 p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Customer Payout (INR)
+                  </span>
+                  <div className="text-lg font-extrabold text-emerald-400">
+                    ₹{customerPayoutINR.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                  <div className="text-[11px] text-slate-400 font-mono">
+                    Buy Rate: <strong className="text-white">₹{buyRate}</strong>
+                    {isCustomBuyRate ? (
+                      <span className="ml-1 text-[9px] text-purple-300 font-bold">(Custom)</span>
+                    ) : (
+                      <span className="ml-1 text-[9px] text-slate-500">(Base)</span>
+                    )}
+                  </div>
+                </div>
 
-            <button
-              type="submit"
-              disabled={submitting}
-              className={`px-8 py-4 rounded-xl font-extrabold text-sm text-white shadow-xl transition flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50 ${
-                mode === 'DEAL'
-                  ? 'bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 hover:from-indigo-500 hover:to-purple-500 shadow-indigo-600/30'
-                  : mode === 'BUY'
-                  ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/30'
-                  : 'bg-amber-600 hover:bg-amber-500 shadow-amber-600/30'
-              }`}
-            >
-              {submitting ? (
-                <>
-                  <RefreshCw className="w-5 h-5 animate-spin" />
-                  Recording Transactions...
-                </>
-              ) : mode === 'DEAL' ? (
-                <>
-                  <ArrowLeftRight className="w-5 h-5" />
-                  Confirm & Record Both Transactions
-                </>
-              ) : mode === 'BUY' ? (
-                <>
-                  <ArrowDownLeft className="w-5 h-5" />
-                  Execute Buy Transaction
-                </>
-              ) : (
-                <>
-                  <ArrowUpRight className="w-5 h-5" />
-                  Execute Sell Transaction
-                </>
-              )}
-            </button>
+                {/* Banker Leg Summary */}
+                <div className="space-y-1 p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Banker Collection (INR)
+                  </span>
+                  <div className="text-lg font-extrabold text-amber-400">
+                    ₹{bankerCollectionINR.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                  <div className="text-[11px] text-slate-400 font-mono">
+                    Sell Rate: <strong className="text-white">₹{sellRate}</strong>
+                    {isCustomSellRate ? (
+                      <span className="ml-1 text-[9px] text-purple-300 font-bold">(Custom)</span>
+                    ) : (
+                      <span className="ml-1 text-[9px] text-slate-500">(Base)</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Deal Net Profit */}
+                <div className="space-y-1 p-3 rounded-xl bg-indigo-950/30 border border-indigo-500/30">
+                  <span className="text-[11px] font-bold text-indigo-300 uppercase tracking-wider block">
+                    Est. Deal Profit
+                  </span>
+                  <div className={`text-lg font-extrabold ${grossProfitINR >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {grossProfitINR >= 0 ? '+' : ''}₹{grossProfitINR.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                  <div className="text-[11px] text-slate-300 flex items-center justify-between">
+                    <span>Spread: <strong>{spreadPerUnit >= 0 ? '+' : ''}₹{spreadPerUnit}/USDT</strong></span>
+                    <span className="text-emerald-400 font-bold font-mono">+${grossProfitUSDT} USDT</span>
+                  </div>
+                </div>
+              </div>
+            ) : mode === 'BUY' ? (
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs text-slate-400 block">Total Payout to Customer:</span>
+                  <div className="text-xl font-extrabold text-emerald-400">
+                    ₹{customerPayoutINR.toLocaleString()}
+                  </div>
+                </div>
+                <div className="text-right text-xs text-slate-400">
+                  <span>Rate: <strong>₹{buyRate}</strong> / USDT</span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs text-slate-400 block">Total Collection from Banker:</span>
+                  <div className="text-xl font-extrabold text-amber-400">
+                    ₹{bankerCollectionINR.toLocaleString()}
+                  </div>
+                </div>
+                <div className="text-right text-xs text-slate-400">
+                  <span>Rate: <strong>₹{sellRate}</strong> / USDT</span>
+                </div>
+              </div>
+            )}
           </div>
+        </div>
+
+        {/* Step 4: Notes & Date */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-300">
+              Transaction Notes (Optional)
+            </label>
+            <input
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="e.g. Bank IMPS reference, cash delivery remarks..."
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-xs font-medium focus:outline-none focus:border-indigo-500"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+              <Calendar className="w-4 h-4 text-indigo-400" /> Transaction Date & Time
+            </label>
+            <input
+              type="datetime-local"
+              value={customDateTime}
+              onChange={(e) => setCustomDateTime(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-indigo-200 font-bold text-xs focus:outline-none focus:border-indigo-400 cursor-pointer"
+            />
+          </div>
+        </div>
+
+        {/* Big Action Submit Button */}
+        <div className="pt-2">
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full py-4 rounded-xl font-extrabold text-base text-white bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 hover:from-indigo-500 hover:to-purple-500 shadow-xl shadow-indigo-600/30 transition flex items-center justify-center gap-3 cursor-pointer disabled:opacity-50"
+          >
+            {submitting ? (
+              <>
+                <RefreshCw className="w-5 h-5 animate-spin" />
+                Recording Transactions...
+              </>
+            ) : mode === 'DEAL' ? (
+              <>
+                <ArrowLeftRight className="w-5 h-5" />
+                Confirm & Record Transaction Deal
+              </>
+            ) : mode === 'BUY' ? (
+              <>
+                <ArrowDownLeft className="w-5 h-5" />
+                Execute Buy Transaction
+              </>
+            ) : (
+              <>
+                <ArrowUpRight className="w-5 h-5" />
+                Execute Sell Transaction
+              </>
+            )}
+          </button>
         </div>
       </form>
     </div>
