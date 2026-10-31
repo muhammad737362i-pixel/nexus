@@ -205,31 +205,28 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
   const numBuyRate = parseFloat(buyRate) || 0;
   const numSellRate = parseFloat(sellRate) || 0;
 
-  let effectiveUSDT = 0;
+  let customerUSDT = 0;
+  let bankerUSDT = 0;
   let customerPayoutINR = 0;
   let bankerCollectionINR = 0;
 
   if (inputCurrencyMode === 'INR') {
-    if (mode === 'SELL') {
-      bankerCollectionINR = Number(numAmount.toFixed(2));
-      effectiveUSDT = numSellRate > 0 ? Number((numAmount / numSellRate).toFixed(4)) : 0;
-      customerPayoutINR = Number((effectiveUSDT * numBuyRate).toFixed(2));
-    } else {
-      // DEAL or BUY mode: Trade Amount in INR is the base deal volume / customer payout
-      customerPayoutINR = Number(numAmount.toFixed(2));
-      effectiveUSDT = numBuyRate > 0 ? Number((numAmount / numBuyRate).toFixed(4)) : 0;
-      bankerCollectionINR = Number((effectiveUSDT * numSellRate).toFixed(2));
-    }
+    customerPayoutINR = Number(numAmount.toFixed(2));
+    bankerCollectionINR = Number(numAmount.toFixed(2));
+    customerUSDT = (numAmount > 0 && numBuyRate > 0) ? Number((numAmount / numBuyRate).toFixed(4)) : 0;
+    bankerUSDT = (numAmount > 0 && numSellRate > 0) ? Number((numAmount / numSellRate).toFixed(4)) : 0;
   } else {
     // USDT mode
-    effectiveUSDT = Number(numAmount.toFixed(4));
+    customerUSDT = Number(numAmount.toFixed(4));
+    bankerUSDT = Number(numAmount.toFixed(4));
     customerPayoutINR = Number((numAmount * numBuyRate).toFixed(2));
     bankerCollectionINR = Number((numAmount * numSellRate).toFixed(2));
   }
 
-  const spreadPerUnit = Number((numSellRate - numBuyRate).toFixed(3));
+  const effectiveUSDT = mode === 'SELL' ? bankerUSDT : customerUSDT;
+  const grossProfitUSDT = (customerUSDT > 0 && bankerUSDT > 0) ? Number((customerUSDT - bankerUSDT).toFixed(4)) : 0;
   const grossProfitINR = Number((bankerCollectionINR - customerPayoutINR).toFixed(2));
-  const grossProfitUSDT = numSellRate > 0 ? Number((grossProfitINR / numSellRate).toFixed(2)) : 0;
+  const spreadPerUnit = Number((numSellRate - numBuyRate).toFixed(3));
   const profitMarginPercent = customerPayoutINR > 0 ? (grossProfitINR / customerPayoutINR) * 100 : 0;
 
   // Selected party objects
@@ -277,6 +274,8 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
             fromCurrency: fiatCurrency,
             toCurrency: assetCurrency,
             usdtAmount: effectiveUSDT,
+            buyUsdtAmount: customerUSDT,
+            sellUsdtAmount: bankerUSDT,
             buyRate: numBuyRate,
             sellRate: numSellRate,
             buyAmountINR: customerPayoutINR,
@@ -299,6 +298,8 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
             spreadPerUSDT: json.spreadPerUSDT,
             customerName: selectedCustomer?.name,
             bankerName: selectedBanker?.name,
+            customerUSDT,
+            bankerUSDT,
             payoutINR: customerPayoutINR,
             collectionINR: bankerCollectionINR,
             usdtAmount: effectiveUSDT,
@@ -499,8 +500,8 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
               <div className="space-y-1">
                 <span className="text-slate-400 block text-[11px] font-semibold">Customer (Buy Leg)</span>
                 <div className="font-bold text-white text-sm">{successReceipts.customerName}</div>
-                <div className="text-emerald-400 font-mono font-bold">
-                  Paid ₹{successReceipts.payoutINR.toLocaleString()} for {successReceipts.usdtAmount} USDT
+                <div className="text-emerald-400 font-mono font-bold text-sm">
+                  {successReceipts.customerUSDT ?? successReceipts.usdtAmount} USDT
                 </div>
                 <div className="text-slate-500 font-mono text-[11px]">
                   Receipt: <span className="text-white">{successReceipts.buyTransaction.receiptNo}</span>
@@ -510,19 +511,12 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
               <div className="space-y-1 sm:border-l sm:border-slate-800 sm:pl-4">
                 <span className="text-slate-400 block text-[11px] font-semibold">Banker (Sell Leg)</span>
                 <div className="font-bold text-white text-sm">{successReceipts.bankerName}</div>
-                <div className="text-amber-400 font-mono font-bold">
-                  Collected ₹{successReceipts.collectionINR.toLocaleString()} for {successReceipts.usdtAmount} USDT
+                <div className="text-amber-400 font-mono font-bold text-sm">
+                  {successReceipts.bankerUSDT ?? successReceipts.usdtAmount} USDT
                 </div>
                 <div className="text-slate-500 font-mono text-[11px]">
                   Receipt: <span className="text-white">{successReceipts.sellTransaction.receiptNo}</span>
                 </div>
-              </div>
-
-              <div className="sm:col-span-2 pt-2 border-t border-slate-800 flex items-center justify-between">
-                <span className="text-slate-400 text-xs">Net Deal Profit:</span>
-                <span className="font-extrabold text-emerald-400 text-sm">
-                  +₹{successReceipts.grossProfitINR.toLocaleString()} INR (+${successReceipts.grossProfitUSDT} USDT)
-                </span>
               </div>
             </div>
           )}
@@ -728,30 +722,6 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
                 </span>
               </div>
 
-              {/* Real-time equivalent volume & rate conversion */}
-              {numAmount > 0 && (
-                <div className="text-[11px] text-slate-400 flex items-center justify-between px-1 pt-0.5">
-                  {inputCurrencyMode === 'INR' ? (
-                    <>
-                      <span>
-                        Calculated Volume: <strong className="text-emerald-400 font-mono">{effectiveUSDT.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} USDT</strong>
-                      </span>
-                      <span className="text-slate-500 font-mono text-[10px]">
-                        @ ₹{mode === 'SELL' ? sellRate : buyRate} Rate
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span>
-                        Equivalent Value: <strong className="text-emerald-400 font-mono">₹{customerPayoutINR.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
-                      </span>
-                      <span className="text-slate-500 font-mono text-[10px]">
-                        @ ₹{mode === 'SELL' ? sellRate : buyRate} Rate
-                      </span>
-                    </>
-                  )}
-                </div>
-              )}
             </div>
 
             {/* Settlement Method */}
@@ -833,7 +803,7 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
             <div className="flex items-center gap-2">
               <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold">3</span>
               <h2 className="text-sm font-bold text-white uppercase tracking-wider">
-                Deal Calculation & Rates
+                Converted USDT
               </h2>
             </div>
             <button
@@ -876,92 +846,46 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
             </div>
           )}
 
-          {/* Unified Deal Calculation Card */}
-          <div className="rounded-2xl p-5 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border border-indigo-500/30 space-y-4">
+          {/* Converted USDT Display */}
+          <div className="rounded-2xl p-5 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border border-indigo-500/30">
             {mode === 'DEAL' ? (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {/* Customer Leg Summary */}
-                <div className="space-y-1 p-3 rounded-xl bg-slate-900/80 border border-slate-800">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                    Customer Payout (INR)
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Customer USDT */}
+                <div className="space-y-1.5 p-4 rounded-xl bg-slate-900/80 border border-slate-800">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+                    Customer USDT
                   </span>
-                  <div className="text-lg font-extrabold text-emerald-400">
-                    ₹{customerPayoutINR.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </div>
-                  <div className="text-[11px] text-slate-400 font-mono">
-                    Buy Rate: <strong className="text-white">₹{buyRate}</strong>
-                    {isCustomBuyRate ? (
-                      <span className="ml-1 text-[9px] text-purple-300 font-bold">(Custom)</span>
-                    ) : (
-                      <span className="ml-1 text-[9px] text-slate-500">(Base)</span>
-                    )}
+                  <div className="text-2xl font-extrabold text-emerald-400 font-mono">
+                    {numAmount > 0 ? `${customerUSDT.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} USDT` : '0.00 USDT'}
                   </div>
                 </div>
 
-                {/* Banker Leg Summary */}
-                <div className="space-y-1 p-3 rounded-xl bg-slate-900/80 border border-slate-800">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                    Banker Collection (INR)
+                {/* Banker USDT */}
+                <div className="space-y-1.5 p-4 rounded-xl bg-slate-900/80 border border-slate-800">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+                    Banker USDT
                   </span>
-                  <div className="text-lg font-extrabold text-amber-400">
-                    ₹{bankerCollectionINR.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </div>
-                  <div className="text-[11px] text-slate-400 font-mono">
-                    Sell Rate: <strong className="text-white">₹{sellRate}</strong>
-                    {isCustomSellRate ? (
-                      <span className="ml-1 text-[9px] text-purple-300 font-bold">(Custom)</span>
-                    ) : (
-                      <span className="ml-1 text-[9px] text-slate-500">(Base)</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Deal Net Profit */}
-                <div className="space-y-1 p-3 rounded-xl bg-indigo-950/30 border border-indigo-500/30">
-                  <span className="text-[11px] font-bold text-indigo-300 uppercase tracking-wider block">
-                    Est. Deal Profit
-                  </span>
-                  <div className={`text-lg font-extrabold ${grossProfitINR >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {grossProfitINR >= 0 ? '+' : ''}₹{grossProfitINR.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </div>
-                  <div className="text-[11px] text-slate-300 flex items-center justify-between">
-                    <span>Spread: <strong>{spreadPerUnit >= 0 ? '+' : ''}₹{spreadPerUnit}/USDT</strong></span>
-                    <span className="text-emerald-400 font-bold font-mono">+${grossProfitUSDT} USDT</span>
+                  <div className="text-2xl font-extrabold text-amber-400 font-mono">
+                    {numAmount > 0 ? `${bankerUSDT.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} USDT` : '0.00 USDT'}
                   </div>
                 </div>
               </div>
             ) : mode === 'BUY' ? (
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <span className="text-xs text-slate-400 block font-semibold uppercase tracking-wider">
-                    Total Payout to Customer:
-                  </span>
-                  <div className="text-xl font-extrabold text-emerald-400">
-                    ₹{customerPayoutINR.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </div>
-                  <div className="text-xs text-slate-300 font-mono mt-0.5">
-                    USDT Received: <strong className="text-white">{effectiveUSDT.toLocaleString()} USDT</strong>
-                  </div>
-                </div>
-                <div className="text-right text-xs text-slate-400">
-                  <span>Applied Rate: <strong className="text-white font-mono">₹{buyRate}</strong> / USDT</span>
+              <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+                  Customer USDT
+                </span>
+                <div className="text-2xl font-extrabold text-emerald-400 font-mono mt-1">
+                  {numAmount > 0 ? `${customerUSDT.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} USDT` : '0.00 USDT'}
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <span className="text-xs text-slate-400 block font-semibold uppercase tracking-wider">
-                    Total Collection from Banker:
-                  </span>
-                  <div className="text-xl font-extrabold text-amber-400">
-                    ₹{bankerCollectionINR.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </div>
-                  <div className="text-xs text-slate-300 font-mono mt-0.5">
-                    USDT Delivered: <strong className="text-white">{effectiveUSDT.toLocaleString()} USDT</strong>
-                  </div>
-                </div>
-                <div className="text-right text-xs text-slate-400">
-                  <span>Applied Rate: <strong className="text-white font-mono">₹{sellRate}</strong> / USDT</span>
+              <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+                  Banker USDT
+                </span>
+                <div className="text-2xl font-extrabold text-amber-400 font-mono mt-1">
+                  {numAmount > 0 ? `${bankerUSDT.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} USDT` : '0.00 USDT'}
                 </div>
               </div>
             )}

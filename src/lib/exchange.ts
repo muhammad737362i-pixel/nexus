@@ -346,6 +346,8 @@ export async function processPairedDealTransaction(params: {
   fromCurrency?: string; // Default 'INR'
   toCurrency?: string;   // Default 'USDT'
   usdtAmount: number;
+  buyUsdtAmount?: number;
+  sellUsdtAmount?: number;
   buyRate: number;
   sellRate: number;
   buyAmountINR?: number;
@@ -376,7 +378,7 @@ export async function processPairedDealTransaction(params: {
   if (!customerId || !bankerId) {
     throw new Error('Both Customer and Banker must be selected for a deal');
   }
-  if (usdtAmount <= 0) {
+  if (usdtAmount <= 0 && (!params.buyUsdtAmount || params.buyUsdtAmount <= 0)) {
     throw new Error('USDT amount must be greater than 0');
   }
   if (buyRate <= 0 || sellRate <= 0) {
@@ -391,16 +393,26 @@ export async function processPairedDealTransaction(params: {
   if (!customer) throw new Error('Customer party not found');
   if (!banker) throw new Error('Banker party not found');
 
+  const buyUsdt = params.buyUsdtAmount && params.buyUsdtAmount > 0
+    ? Number(params.buyUsdtAmount.toFixed(4))
+    : (params.buyAmountINR && buyRate > 0 ? Number((params.buyAmountINR / buyRate).toFixed(4)) : Number(usdtAmount.toFixed(4)));
+
+  const sellUsdt = params.sellUsdtAmount && params.sellUsdtAmount > 0
+    ? Number(params.sellUsdtAmount.toFixed(4))
+    : (params.sellAmountINR && sellRate > 0 ? Number((params.sellAmountINR / sellRate).toFixed(4)) : Number(usdtAmount.toFixed(4)));
+
   const buyAmountINR = params.buyAmountINR && params.buyAmountINR > 0
     ? Number(params.buyAmountINR.toFixed(2))
-    : Number((usdtAmount * buyRate).toFixed(2));
+    : Number((buyUsdt * buyRate).toFixed(2));
 
   const sellAmountINR = params.sellAmountINR && params.sellAmountINR > 0
     ? Number(params.sellAmountINR.toFixed(2))
-    : Number((usdtAmount * sellRate).toFixed(2));
+    : Number((sellUsdt * sellRate).toFixed(2));
 
-  const grossProfitINR = Number((sellAmountINR - buyAmountINR + buyFee + sellFee).toFixed(2));
-  const grossProfitUSDT = sellRate > 0 ? Number((grossProfitINR / sellRate).toFixed(2)) : 0;
+  const grossProfitUSDT = (buyAmountINR === sellAmountINR && buyUsdt > 0 && sellUsdt > 0)
+    ? Number((buyUsdt - sellUsdt).toFixed(4))
+    : (sellRate > 0 ? Number(((sellAmountINR - buyAmountINR + buyFee + sellFee) / sellRate).toFixed(4)) : 0);
+  const grossProfitINR = Number((grossProfitUSDT * sellRate).toFixed(2));
 
   const [buyReceiptNo, sellReceiptNo] = await generateTwoSequentialReceiptNos();
   const txDate = parseISTDate(createdAt);
@@ -415,7 +427,7 @@ export async function processPairedDealTransaction(params: {
         fromCurrency,
         toCurrency,
         amountGiven: buyAmountINR,
-        amountReceived: usdtAmount,
+        amountReceived: buyUsdt,
         appliedRate: buyRate,
         fee: buyFee,
         totalProfit: 0,
@@ -438,7 +450,7 @@ export async function processPairedDealTransaction(params: {
         fromCurrency,
         toCurrency,
         amountGiven: sellAmountINR,
-        amountReceived: usdtAmount,
+        amountReceived: sellUsdt,
         appliedRate: sellRate,
         fee: sellFee,
         totalProfit: grossProfitUSDT,
@@ -504,19 +516,27 @@ export async function processPairedDealTransaction(params: {
     });
 
     // USDT Inventory:
-    // If payment methods differ between legs, adjust respective cash/bank accounts
+    let invUSDT = await tx.currencyInventory.findUnique({ where: { currencyCode: toCurrency } });
+    if (!invUSDT) {
+      invUSDT = await tx.currencyInventory.create({ data: { currencyCode: toCurrency, cashBalance: 0, bankBalance: 0 } });
+    }
     if (buyPaymentMethod !== sellPaymentMethod) {
-      let invUSDT = await tx.currencyInventory.findUnique({ where: { currencyCode: toCurrency } });
-      if (!invUSDT) {
-        invUSDT = await tx.currencyInventory.create({ data: { currencyCode: toCurrency, cashBalance: 0, bankBalance: 0 } });
-      }
-      const newBuyBal = invUSDT[buyMethodField] + usdtAmount;
-      const newSellBal = Math.max(0, invUSDT[sellMethodField] - usdtAmount);
+      const newBuyBal = invUSDT[buyMethodField] + buyUsdt;
+      const newSellBal = Math.max(0, invUSDT[sellMethodField] - sellUsdt);
       await tx.currencyInventory.update({
         where: { currencyCode: toCurrency },
         data: {
-          [buyMethodField]: Number(newBuyBal.toFixed(2)),
-          [sellMethodField]: Number(newSellBal.toFixed(2)),
+          [buyMethodField]: Number(newBuyBal.toFixed(4)),
+          [sellMethodField]: Number(newSellBal.toFixed(4)),
+        },
+      });
+    } else {
+      const netUSDTDiff = buyUsdt - sellUsdt;
+      const newBal = invUSDT[buyMethodField] + netUSDTDiff;
+      await tx.currencyInventory.update({
+        where: { currencyCode: toCurrency },
+        data: {
+          [buyMethodField]: Number(Math.max(0, newBal).toFixed(4)),
         },
       });
     }
