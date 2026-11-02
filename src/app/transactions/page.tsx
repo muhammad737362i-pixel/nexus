@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import {
   Receipt,
@@ -26,6 +26,27 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { formatISTDateTime, toISTDateTimeLocalString, getTodayISTDateString } from '@/lib/dateUtils';
+
+export interface TradeDealItem {
+  key: string;
+  isDeal: boolean;
+  receiptDisplay: string;
+  customerReceiptNo?: string;
+  bankerReceiptNo?: string;
+  createdAt: string;
+  customerName: string;
+  customerPhone?: string;
+  bankerName: string;
+  bankerPhone?: string;
+  tradeAmountINR: number;
+  customerRate?: number;
+  bankerRate?: number;
+  customerUSDT?: number;
+  bankerUSDT?: number;
+  profitUSDT: number;
+  primaryTx: any;
+  pairedTx?: any;
+}
 
 function parseAmountInput(input: string) {
   const raw = input.trim().toLowerCase();
@@ -72,22 +93,19 @@ export default function TransactionsPage() {
   const [metrics, setMetrics] = useState<{
     totalCount: number;
     totalBuyVolume: number;
+    totalBuyVolumeUSDT?: number;
     totalSellVolume: number;
+    totalSellVolumeUSDT?: number;
     totalProfit: number;
-  }>({ totalCount: 0, totalBuyVolume: 0, totalSellVolume: 0, totalProfit: 0 });
+  }>({ totalCount: 0, totalBuyVolume: 0, totalBuyVolumeUSDT: 0, totalSellVolume: 0, totalSellVolumeUSDT: 0, totalProfit: 0 });
 
-  // Parties & Currencies lists for filter dropdowns
+  // Parties metadata
   const [parties, setParties] = useState<any[]>([]);
-  const [currencies, setCurrencies] = useState<any[]>([]);
 
-  // Combined Search & Filter State
+  // Search & Filter State
   const [search, setSearch] = useState('');
   const [amountFilter, setAmountFilter] = useState('');
-  const [filterType, setFilterType] = useState<string>('ALL'); // ALL, BUY, SELL
-  const [partyType, setPartyType] = useState<string>('ALL'); // ALL, CUSTOMER, BANKER
   const [selectedPartyId, setSelectedPartyId] = useState<string>('ALL');
-  const [paymentMethod, setPaymentMethod] = useState<string>('ALL'); // ALL, CASH, BANK
-  const [currencyFilter, setCurrencyFilter] = useState<string>('ALL');
 
   // Date Range Presets
   const [datePreset, setDatePreset] = useState<string>('ALL'); // ALL, TODAY, YESTERDAY, WEEK, MONTH, CUSTOM
@@ -109,7 +127,7 @@ export default function TransactionsPage() {
       if (json.success) {
         setShowClearConfirmModal(false);
         setTransactions([]);
-        setMetrics({ totalCount: 0, totalBuyVolume: 0, totalSellVolume: 0, totalProfit: 0 });
+        setMetrics({ totalCount: 0, totalBuyVolume: 0, totalBuyVolumeUSDT: 0, totalSellVolume: 0, totalSellVolumeUSDT: 0, totalProfit: 0 });
       } else {
         alert(json.error || 'Failed to clear transactions');
       }
@@ -120,18 +138,13 @@ export default function TransactionsPage() {
     }
   };
 
-  // Load parties and currencies metadata only on mount
+  // Load parties metadata only on mount
   useEffect(() => {
     async function loadMetadata() {
       try {
-        const [partyRes, currRes] = await Promise.all([
-          fetch('/api/parties'),
-          fetch('/api/currencies'),
-        ]);
+        const partyRes = await fetch('/api/parties');
         const partyJson = await partyRes.json();
-        const currJson = await currRes.json();
         if (partyJson.success) setParties(partyJson.parties || []);
-        if (currJson.success) setCurrencies(currJson.currencies || []);
       } catch (e) {
         console.error(e);
       } finally {
@@ -179,11 +192,7 @@ export default function TransactionsPage() {
       const params = new URLSearchParams();
 
       if (search.trim()) params.append('search', search.trim());
-      if (filterType !== 'ALL') params.append('type', filterType);
-      if (partyType !== 'ALL') params.append('partyType', partyType);
       if (selectedPartyId !== 'ALL') params.append('partyId', selectedPartyId);
-      if (paymentMethod !== 'ALL') params.append('paymentMethod', paymentMethod);
-      if (currencyFilter !== 'ALL') params.append('currency', currencyFilter);
 
       if (amountFilter.trim()) {
         const { amount: parsedAmt, minAmount: parsedMin, maxAmount: parsedMax } = parseAmountInput(amountFilter);
@@ -220,62 +229,139 @@ export default function TransactionsPage() {
   const resetAllFilters = () => {
     setSearch('');
     setAmountFilter('');
-    setFilterType('ALL');
-    setPartyType('ALL');
     setSelectedPartyId('ALL');
-    setPaymentMethod('ALL');
-    setCurrencyFilter('ALL');
     setDatePreset('ALL');
     setStartDate('');
     setEndDate('');
     setHasSearched(false);
     setTransactions([]);
-    setMetrics({ totalCount: 0, totalBuyVolume: 0, totalSellVolume: 0, totalProfit: 0 });
+    setMetrics({ totalCount: 0, totalBuyVolume: 0, totalBuyVolumeUSDT: 0, totalSellVolume: 0, totalSellVolumeUSDT: 0, totalProfit: 0 });
   };
 
   const hasActiveFilters =
     search !== '' ||
     amountFilter.trim() !== '' ||
-    filterType !== 'ALL' ||
-    partyType !== 'ALL' ||
     selectedPartyId !== 'ALL' ||
-    paymentMethod !== 'ALL' ||
-    currencyFilter !== 'ALL' ||
     datePreset !== 'ALL' ||
     startDate !== '' ||
     endDate !== '';
 
+  // Unified Trade Deals Grouping
+  const deals = useMemo(() => {
+    const sorted = [...transactions].sort((a, b) => {
+      const timeA = new Date(a.createdAt).getTime();
+      const timeB = new Date(b.createdAt).getTime();
+      if (timeB !== timeA) return timeB - timeA;
+      return (b.receiptNo || '').localeCompare(a.receiptNo || '', undefined, { numeric: true });
+    });
+    const seenReceipts = new Set<string>();
+    const result: TradeDealItem[] = [];
+
+    for (const tx of sorted) {
+      if (seenReceipts.has(tx.receiptNo)) continue;
+      const pairedReceipt = tx.pairedTx?.receiptNo;
+
+      if (pairedReceipt) {
+        seenReceipts.add(tx.receiptNo);
+        seenReceipts.add(pairedReceipt);
+
+        const isCustomer = tx.type === 'BUY';
+        const buyLeg = isCustomer ? tx : tx.pairedTx;
+        const sellLeg = isCustomer ? tx.pairedTx : tx;
+
+        const customerUSDT = buyLeg?.amountReceived || (buyLeg?.appliedRate > 0 ? buyLeg.amountGiven / buyLeg.appliedRate : 0);
+        const bankerUSDT = sellLeg?.amountReceived || (sellLeg?.appliedRate > 0 ? sellLeg.amountGiven / sellLeg.appliedRate : 0);
+        const profit = sellLeg?.totalProfit !== undefined && sellLeg?.totalProfit !== null && sellLeg?.totalProfit > 0
+          ? sellLeg.totalProfit
+          : (customerUSDT > 0 && bankerUSDT > 0 ? Number((customerUSDT - bankerUSDT).toFixed(4)) : 0);
+
+        result.push({
+          key: `${buyLeg.receiptNo}-${sellLeg.receiptNo}`,
+          isDeal: true,
+          receiptDisplay: `${buyLeg.receiptNo} / ${sellLeg.receiptNo}`,
+          customerReceiptNo: buyLeg.receiptNo,
+          bankerReceiptNo: sellLeg.receiptNo,
+          createdAt: tx.createdAt,
+          customerName: buyLeg.party?.name || buyLeg.partyName || 'Customer',
+          customerPhone: buyLeg.party?.phone,
+          bankerName: sellLeg.party?.name || sellLeg.partyName || 'Banker',
+          bankerPhone: sellLeg.party?.phone,
+          tradeAmountINR: tx.amountGiven,
+          customerRate: buyLeg.appliedRate,
+          bankerRate: sellLeg.appliedRate,
+          customerUSDT: Number(customerUSDT.toFixed(4)),
+          bankerUSDT: Number(bankerUSDT.toFixed(4)),
+          profitUSDT: Number(profit.toFixed(2)),
+          primaryTx: tx,
+          pairedTx: tx.pairedTx,
+        });
+      } else {
+        seenReceipts.add(tx.receiptNo);
+        const isBuy = tx.type === 'BUY';
+        const usdtAmt = tx.amountReceived || (tx.appliedRate > 0 ? tx.amountGiven / tx.appliedRate : 0);
+        result.push({
+          key: tx.id || tx.receiptNo,
+          isDeal: false,
+          receiptDisplay: tx.receiptNo,
+          customerReceiptNo: isBuy ? tx.receiptNo : undefined,
+          bankerReceiptNo: !isBuy ? tx.receiptNo : undefined,
+          createdAt: tx.createdAt,
+          customerName: isBuy ? (tx.party?.name || 'Customer') : '—',
+          customerPhone: isBuy ? tx.party?.phone : undefined,
+          bankerName: !isBuy ? (tx.party?.name || 'Banker') : '—',
+          bankerPhone: !isBuy ? tx.party?.phone : undefined,
+          tradeAmountINR: tx.amountGiven,
+          customerRate: isBuy ? tx.appliedRate : undefined,
+          bankerRate: !isBuy ? tx.appliedRate : undefined,
+          customerUSDT: isBuy ? Number(usdtAmt.toFixed(4)) : undefined,
+          bankerUSDT: !isBuy ? Number(usdtAmt.toFixed(4)) : undefined,
+          profitUSDT: Number((tx.totalProfit || 0).toFixed(2)),
+          primaryTx: tx,
+        });
+      }
+    }
+    return result;
+  }, [transactions]);
+
+  const totalTradeVolumeINR = useMemo(() => {
+    return deals.reduce((sum, d) => sum + (d.tradeAmountINR || 0), 0);
+  }, [deals]);
+
+  const totalCustomerUSDT = useMemo(() => {
+    return deals.reduce((sum, d) => sum + (d.customerUSDT || 0), 0);
+  }, [deals]);
+
+  const totalProfitUSDT = useMemo(() => {
+    return deals.reduce((sum, d) => sum + (d.profitUSDT || 0), 0);
+  }, [deals]);
+
   const exportToCSV = () => {
-    if (transactions.length === 0) return;
+    if (deals.length === 0) return;
     const headers = [
-      'ReceiptNo',
-      'Type',
-      'Party',
-      'PartyType',
-      'FromCurrency',
-      'AmountGiven',
-      'AppliedRate',
-      'ToCurrency',
-      'AmountReceived',
-      'Profit',
-      'PaymentMethod',
-      'Status',
+      'CustomerReceiptNo',
+      'BankerReceiptNo',
       'Date',
+      'Customer',
+      'Banker',
+      'TradeAmountINR',
+      'CustomerRate',
+      'CustomerUSDT',
+      'BankerRate',
+      'BankerUSDT',
+      'EstProfitUSDT',
     ];
-    const rows = transactions.map((t) => [
-      t.receiptNo,
-      t.type,
-      `"${t.party?.name || ''}"`,
-      t.party?.type || '',
-      t.fromCurrency,
-      t.amountGiven,
-      t.appliedRate,
-      t.toCurrency,
-      t.amountReceived,
-      t.totalProfit,
-      t.paymentMethod,
-      t.status,
-      formatISTDateTime(t.createdAt),
+    const rows = deals.map((d) => [
+      d.customerReceiptNo || '',
+      d.bankerReceiptNo || '',
+      formatISTDateTime(d.createdAt),
+      `"${d.customerName}"`,
+      `"${d.bankerName}"`,
+      d.tradeAmountINR,
+      d.customerRate || '',
+      d.customerUSDT || '',
+      d.bankerRate || '',
+      d.bankerUSDT || '',
+      d.profitUSDT,
     ]);
 
     const csvContent =
@@ -284,7 +370,7 @@ export default function TransactionsPage() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Nexus_Transactions_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `Nexus_Trade_Deals_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -308,8 +394,6 @@ export default function TransactionsPage() {
       alert(e.message || 'Error deleting transaction');
     }
   };
-
-
 
   const handleSaveTransactionEdit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -346,10 +430,6 @@ export default function TransactionsPage() {
       setEditSaving(false);
     }
   };
-
-  // Filter parties by selected partyType if applicable
-  const filteredPartiesList =
-    partyType === 'ALL' ? parties : parties.filter((p) => p.type === partyType);
 
   if (loading) {
     return (
@@ -410,10 +490,10 @@ export default function TransactionsPage() {
         <div className="glass-card rounded-2xl p-4 border border-slate-800 flex items-center justify-between">
           <div>
             <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider block">
-              Filtered Trades
+              Filtered Deals
             </span>
             <div className="text-xl font-extrabold text-white mt-1">
-              {metrics.totalCount} <span className="text-xs font-normal text-slate-400">Transactions</span>
+              {deals.length} <span className="text-xs font-normal text-slate-400">Deals</span>
             </div>
           </div>
           <div className="p-3 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
@@ -424,13 +504,27 @@ export default function TransactionsPage() {
         <div className="glass-card rounded-2xl p-4 border border-slate-800 flex items-center justify-between">
           <div>
             <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider block">
-              Filtered Buy Volume
+              Total Trade Volume
             </span>
-            <div className="text-xl font-extrabold text-emerald-400 mt-1">
-              {metrics.totalBuyVolume.toLocaleString()}
+            <div className="text-xl font-extrabold text-white mt-1">
+              ₹{totalTradeVolumeINR.toLocaleString('en-IN')}
             </div>
           </div>
           <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <Banknote className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="glass-card rounded-2xl p-4 border border-slate-800 flex items-center justify-between">
+          <div>
+            <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider block">
+              Customer USDT Given
+            </span>
+            <div className="text-xl font-extrabold text-indigo-400 mt-1">
+              {totalCustomerUSDT.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
+            </div>
+          </div>
+          <div className="p-3 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
             <ArrowDownLeft className="w-5 h-5" />
           </div>
         </div>
@@ -438,24 +532,10 @@ export default function TransactionsPage() {
         <div className="glass-card rounded-2xl p-4 border border-slate-800 flex items-center justify-between">
           <div>
             <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider block">
-              Filtered Sell Volume
-            </span>
-            <div className="text-xl font-extrabold text-amber-400 mt-1">
-              {metrics.totalSellVolume.toLocaleString()}
-            </div>
-          </div>
-          <div className="p-3 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
-            <ArrowUpRight className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="glass-card rounded-2xl p-4 border border-slate-800 flex items-center justify-between">
-          <div>
-            <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider block">
-              Filtered Est. Profit
+              Total Est. Profit
             </span>
             <div className="text-xl font-extrabold text-emerald-400 mt-1">
-              +${metrics.totalProfit.toFixed(2)} USDT
+              +${totalProfitUSDT.toFixed(2)} USDT
             </div>
           </div>
           <div className="p-3 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20">
@@ -464,7 +544,7 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      {/* COMBINED MULTI-FILTER CONTROL PANEL */}
+      {/* STREAMLINED SEARCH & FILTER CONTROL PANEL */}
       <div className="glass-card rounded-2xl p-5 border border-slate-800 space-y-4">
         {/* Row 1: Search Input & Date Preset Chips */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -542,27 +622,8 @@ export default function TransactionsPage() {
 
         <hr className="border-slate-800/80" />
 
-        {/* Row 2: Select Filter Dropdowns (Party Type, Specific Person, Trade Type, Payment Method, Currency, INR Amount) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          {/* Party Type Filter */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
-              Party Category
-            </label>
-            <select
-              value={partyType}
-              onChange={(e) => {
-                setPartyType(e.target.value);
-                setSelectedPartyId('ALL');
-              }}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-medium text-xs focus:outline-none focus:border-indigo-500"
-            >
-              <option value="ALL">All Categories</option>
-              <option value="CUSTOMER">Customers Only</option>
-              <option value="BANKER">Bankers Only</option>
-            </select>
-          </div>
-
+        {/* Row 2: Select Person / Party, INR Amount Filter & Execute Search */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 items-end">
           {/* Specific Party Dropdown */}
           <div className="space-y-1">
             <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
@@ -571,63 +632,12 @@ export default function TransactionsPage() {
             <select
               value={selectedPartyId}
               onChange={(e) => setSelectedPartyId(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-medium text-xs focus:outline-none focus:border-indigo-500"
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white font-medium text-xs focus:outline-none focus:border-indigo-500"
             >
               <option value="ALL">All Persons / Counterparties</option>
-              {filteredPartiesList.map((p) => (
+              {parties.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Trade Type Filter */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
-              Trade Type
-            </label>
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-medium text-xs focus:outline-none focus:border-indigo-500"
-            >
-              <option value="ALL">All Trades (Buy & Sell)</option>
-              <option value="BUY">BUY Trades Only</option>
-              <option value="SELL">SELL Trades Only</option>
-            </select>
-          </div>
-
-          {/* Payment Method Filter */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
-              Payment Source
-            </label>
-            <select
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-medium text-xs focus:outline-none focus:border-indigo-500"
-            >
-              <option value="ALL">All Payment Sources</option>
-              <option value="CASH">Cash Holding (Safe)</option>
-              <option value="BANK">Bank Account</option>
-            </select>
-          </div>
-
-          {/* Currency Filter */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
-              Currency Pair
-            </label>
-            <select
-              value={currencyFilter}
-              onChange={(e) => setCurrencyFilter(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-medium text-xs focus:outline-none focus:border-indigo-500"
-            >
-              <option value="ALL">All Currencies</option>
-              {currencies.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.code} ({c.name})
+                  {p.name} ({p.type === 'CUSTOMER' ? 'Customer' : 'Banker'})
                 </option>
               ))}
             </select>
@@ -648,7 +658,7 @@ export default function TransactionsPage() {
                   if (e.key === 'Enter') executeSearch();
                 }}
                 placeholder="e.g. 50000 or 10k-50k"
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-7 pr-7 py-2 text-white font-medium text-xs placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-7 pr-7 py-2.5 text-white font-medium text-xs placeholder-slate-500 focus:outline-none focus:border-indigo-500"
               />
               {amountFilter && (
                 <button
@@ -661,33 +671,40 @@ export default function TransactionsPage() {
               )}
             </div>
           </div>
+
+          {/* Search Transactions Button */}
+          <div>
+            <button
+              onClick={executeSearch}
+              disabled={searching}
+              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition cursor-pointer flex items-center justify-center gap-2"
+            >
+              {searching ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Searching Transactions...</span>
+                </>
+              ) : (
+                <>
+                  <Search className="w-4 h-4" />
+                  <span>Search Transactions Now</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
-        {/* Search Execute Action Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-800/80">
-          <p className="text-xs text-slate-400">
-            {hasSearched
-              ? `Showing trade records matching selected search filters.`
-              : `Select your search filters above and click "Search Transactions Now" to load trade records.`}
-          </p>
-          <button
-            onClick={executeSearch}
-            disabled={searching}
-            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition cursor-pointer flex items-center justify-center gap-2"
-          >
-            {searching ? (
-              <>
-                <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>Searching Transactions...</span>
-              </>
-            ) : (
-              <>
-                <Search className="w-4 h-4" />
-                <span>Search Transactions Now</span>
-              </>
-            )}
-          </button>
-        </div>
+        {hasActiveFilters && (
+          <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/80">
+            <span>Filters applied: showing matching trade records.</span>
+            <button
+              onClick={resetAllFilters}
+              className="text-xs text-rose-400 hover:text-rose-300 font-semibold underline cursor-pointer"
+            >
+              Reset all filters
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Transactions Table */}
@@ -704,106 +721,174 @@ export default function TransactionsPage() {
               <tr>
                 <th className="py-3 px-4">Receipt #</th>
                 <th className="py-3 px-4">Date & Time</th>
-                <th className="py-3 px-4">Type</th>
-                <th className="py-3 px-4">Person / Party</th>
-                <th className="py-3 px-4">Amount Given</th>
-                <th className="py-3 px-4">Applied Rate</th>
-                <th className="py-3 px-4">Amount Received</th>
+                <th className="py-3 px-4">Customer</th>
+                <th className="py-3 px-4">Banker</th>
+                <th className="py-3 px-4">Trade Amount (₹)</th>
+                <th className="py-3 px-4">Customer USDT</th>
+                <th className="py-3 px-4">Banker USDT</th>
                 <th className="py-3 px-4">Est. Profit</th>
                 <th className="py-3 px-4 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/80">
-              {(() => {
-                const sorted = [...transactions].sort((a, b) => {
-                  const timeA = new Date(a.createdAt).getTime();
-                  const timeB = new Date(b.createdAt).getTime();
-                  if (timeB !== timeA) return timeB - timeA;
-                  return (b.receiptNo || '').localeCompare(a.receiptNo || '', undefined, { numeric: true });
-                });
-                return sorted.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="py-16 text-center text-slate-500">
-                      {!hasSearched ? (
-                        <div className="space-y-3 max-w-sm mx-auto">
-                          <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center mx-auto">
-                            <Search className="w-6 h-6" />
-                          </div>
-                          <div>
-                            <h4 className="font-bold text-white text-sm">Search Transactions Audit Log</h4>
-                            <p className="text-slate-400 text-xs mt-1">
-                              Select search filters above and click <strong>"Search Transactions Now"</strong> to load trade history.
-                            </p>
-                          </div>
+              {deals.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="py-16 text-center text-slate-500">
+                    {!hasSearched ? (
+                      <div className="space-y-3 max-w-sm mx-auto">
+                        <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center mx-auto">
+                          <Search className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-white text-sm">Search Transactions Audit Log</h4>
+                          <p className="text-slate-400 text-xs mt-1">
+                            Select search filters above and click <strong>"Search Transactions Now"</strong> to load trade history.
+                          </p>
+                        </div>
+                        <button
+                          onClick={executeSearch}
+                          disabled={searching}
+                          className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/20 transition cursor-pointer flex items-center justify-center gap-2 mx-auto"
+                        >
+                          <Search className="w-3.5 h-3.5" /> Search Transactions Now
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Receipt className="w-8 h-8 mx-auto text-slate-600" />
+                        <p className="font-semibold text-slate-400">No transactions match your search filters.</p>
+                        {hasActiveFilters && (
                           <button
-                            onClick={executeSearch}
-                            disabled={searching}
-                            className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/20 transition cursor-pointer flex items-center justify-center gap-2 mx-auto"
+                            onClick={resetAllFilters}
+                            className="text-xs text-indigo-400 hover:text-indigo-300 font-bold underline cursor-pointer"
                           >
-                            <Search className="w-3.5 h-3.5" /> Search Transactions Now
+                            Clear all search filters
                           </button>
+                        )}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ) : (
+                deals.map((deal) => (
+                  <tr key={deal.key} className="hover:bg-slate-800/40 transition">
+                    {/* Receipt # */}
+                    <td className="py-3.5 px-4 font-mono text-xs">
+                      {deal.isDeal ? (
+                        <div className="space-y-0.5">
+                          <div className="font-bold text-indigo-400 flex items-center gap-1 text-[11px]">
+                            <span className="text-[10px] text-slate-500 font-sans font-normal">C:</span>
+                            {deal.customerReceiptNo}
+                          </div>
+                          <div className="text-purple-400 font-semibold flex items-center gap-1 text-[11px]">
+                            <span className="text-[10px] text-slate-500 font-sans font-normal">B:</span>
+                            {deal.bankerReceiptNo}
+                          </div>
                         </div>
                       ) : (
-                        <div className="space-y-2">
-                          <Receipt className="w-8 h-8 mx-auto text-slate-600" />
-                          <p className="font-semibold text-slate-400">No transactions match your search filters.</p>
-                          {hasActiveFilters && (
-                            <button
-                              onClick={resetAllFilters}
-                              className="text-xs text-indigo-400 hover:text-indigo-300 font-bold underline cursor-pointer"
-                            >
-                              Clear all search filters
-                            </button>
-                          )}
-                        </div>
+                        <span className="font-bold text-indigo-400">{deal.receiptDisplay}</span>
                       )}
                     </td>
-                  </tr>
-                ) : (
-                  sorted.map((tx) => (
-                  <tr key={tx.id} className="hover:bg-slate-800/40 transition">
-                    <td className="py-3.5 px-4 font-mono font-bold text-indigo-400">{tx.receiptNo}</td>
-                    <td className="py-3.5 px-4 text-slate-400 text-[11px]">
-                      {formatISTDateTime(tx.createdAt)}
+
+                    {/* Date & Time */}
+                    <td className="py-3.5 px-4 text-slate-400 text-[11px] whitespace-nowrap">
+                      {formatISTDateTime(deal.createdAt)}
                     </td>
-                    <td className="py-3.5 px-4 font-bold">
+
+                    {/* Customer */}
+                    <td className="py-3.5 px-4">
+                      <div className="font-semibold text-white flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                        <span>{deal.customerName}</span>
+                      </div>
+                      {deal.customerPhone && (
+                        <span className="text-[10px] text-slate-500 font-mono pl-5 block">
+                          {deal.customerPhone}
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Banker */}
+                    <td className="py-3.5 px-4">
+                      <div className="font-semibold text-white flex items-center gap-1.5">
+                        <Building2 className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                        <span>{deal.bankerName}</span>
+                      </div>
+                      {deal.bankerPhone && (
+                        <span className="text-[10px] text-slate-500 font-mono pl-5 block">
+                          {deal.bankerPhone}
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Trade Amount (₹) */}
+                    <td className="py-3.5 px-4 font-bold text-white whitespace-nowrap">
+                      ₹{deal.tradeAmountINR?.toLocaleString('en-IN')}
+                    </td>
+
+                    {/* Customer USDT */}
+                    <td className="py-3.5 px-4">
+                      {deal.customerUSDT !== undefined ? (
+                        <div>
+                          <span className="font-bold text-emerald-400 font-mono">
+                            {deal.customerUSDT.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                          </span>
+                          <span className="text-slate-400 text-[10px] ml-1">USDT</span>
+                          {deal.customerRate && (
+                            <div className="text-[10px] text-slate-400 font-mono">
+                              @ ₹{deal.customerRate}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-slate-500">—</span>
+                      )}
+                    </td>
+
+                    {/* Banker USDT */}
+                    <td className="py-3.5 px-4">
+                      {deal.bankerUSDT !== undefined ? (
+                        <div>
+                          <span className="font-bold text-amber-400 font-mono">
+                            {deal.bankerUSDT.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                          </span>
+                          <span className="text-slate-400 text-[10px] ml-1">USDT</span>
+                          {deal.bankerRate && (
+                            <div className="text-[10px] text-slate-400 font-mono">
+                              @ ₹{deal.bankerRate}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-slate-500">—</span>
+                      )}
+                    </td>
+
+                    {/* Est. Profit */}
+                    <td className="py-3.5 px-4 font-bold whitespace-nowrap">
                       <span
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] uppercase ${
-                          tx.type === 'BUY'
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-mono ${
+                          deal.profitUSDT >= 0
                             ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                            : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                            : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
                         }`}
                       >
-                        {tx.type === 'BUY' ? <ArrowDownLeft className="w-3 h-3" /> : <ArrowUpRight className="w-3 h-3" />}
-                        {tx.type}
+                        <TrendingUp className="w-3 h-3" />
+                        {deal.profitUSDT >= 0 ? '+' : ''}${deal.profitUSDT.toFixed(2)} USDT
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 font-semibold text-white">
-                      {tx.party?.name}
-                      <span className="block text-[10px] text-slate-500 font-normal">
-                        {tx.party?.type === 'CUSTOMER' ? 'Customer' : 'Banker'}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 font-bold text-white">
-                      {tx.amountGiven.toLocaleString('en-US')} <span className="text-slate-400 font-normal">{tx.fromCurrency}</span>
-                    </td>
-                    <td className="py-3.5 px-4 font-mono text-amber-300 font-bold">{tx.appliedRate}</td>
-                    <td className="py-3.5 px-4 font-bold text-white">
-                      {tx.amountReceived.toLocaleString('en-US')} <span className="text-slate-400 font-normal">{tx.toCurrency}</span>
-                    </td>
-                    <td className="py-3.5 px-4 font-bold text-emerald-400">
-                      +${tx.totalProfit.toFixed(2)} USDT
-                    </td>
+
+                    {/* Action */}
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
-                          onClick={() => setActiveReceipt(tx)}
-                          className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-indigo-300 rounded-lg text-[11px] font-semibold inline-flex items-center gap-1 cursor-pointer"
+                          onClick={() => setActiveReceipt(deal)}
+                          className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-indigo-300 rounded-lg text-[11px] font-semibold inline-flex items-center gap-1 cursor-pointer transition"
                         >
                           <FileText className="w-3 h-3" /> Receipt
                         </button>
                         <button
-                          onClick={() => setEditingTx({ ...tx, createdAt: toISTDateTimeLocalString(tx.createdAt) })}
+                          onClick={() => setEditingTx({ ...deal.primaryTx, createdAt: toISTDateTimeLocalString(deal.primaryTx.createdAt) })}
                           title="Edit or Delete transaction"
                           className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 transition cursor-pointer"
                         >
@@ -813,8 +898,7 @@ export default function TransactionsPage() {
                     </td>
                   </tr>
                 ))
-              );
-            })()}
+              )}
             </tbody>
           </table>
         </div>
@@ -823,58 +907,122 @@ export default function TransactionsPage() {
       {/* Printable Receipt Modal */}
       {activeReceipt && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="glass-card rounded-2xl p-6 border border-slate-700 w-full max-w-md space-y-6 animate-fadeIn bg-slate-900 text-white max-h-[90vh] overflow-y-auto my-auto">
+          <div className="glass-card rounded-2xl p-6 border border-slate-700 w-full max-w-lg space-y-6 animate-fadeIn bg-slate-900 text-white max-h-[90vh] overflow-y-auto my-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <Receipt className="w-5 h-5 text-indigo-400" />
-                <h3 className="font-bold text-lg">Exchange Receipt</h3>
+                <h3 className="font-bold text-lg">
+                  {activeReceipt.isDeal ? 'Trade Deal Receipt Voucher' : 'Exchange Receipt'}
+                </h3>
               </div>
-              <button onClick={() => setActiveReceipt(null)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setActiveReceipt(null)} className="text-slate-400 hover:text-white cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-3 font-mono text-xs">
+            <div className="p-5 bg-slate-950 rounded-xl border border-slate-800 space-y-4 font-mono text-xs">
               <div className="text-center pb-3 border-b border-slate-800 space-y-1">
-                <div className="font-bold text-sm tracking-wider text-indigo-400">NEXUS EXCHANGE</div>
-                <div className="text-[10px] text-slate-500">Official Transaction Voucher</div>
-                <div className="text-xs text-white font-bold">{activeReceipt.receiptNo}</div>
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Date:</span>
-                  <span className="text-slate-300">{formatISTDateTime(activeReceipt.createdAt)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Party Name:</span>
-                  <span className="font-bold text-white">{activeReceipt.party?.name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Transaction Type:</span>
-                  <span className="font-bold text-emerald-400">{activeReceipt.type}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Amount Paid:</span>
-                  <span className="font-bold text-white">{activeReceipt.amountGiven} {activeReceipt.fromCurrency}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Applied Rate:</span>
-                  <span className="font-bold text-amber-300">{activeReceipt.appliedRate}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Amount Received:</span>
-                  <span className="font-bold text-white">{activeReceipt.amountReceived} {activeReceipt.toCurrency}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Settlement Method:</span>
-                  <span className="text-slate-300">{activeReceipt.paymentMethod}</span>
+                <div className="font-bold text-base tracking-wider text-indigo-400">NEXUS EXCHANGE</div>
+                <div className="text-[10px] text-slate-500 uppercase tracking-widest">Official Trade Deal Voucher</div>
+                <div className="text-xs text-white font-bold mt-1">
+                  {activeReceipt.receiptDisplay || activeReceipt.receiptNo}
                 </div>
               </div>
 
-              {activeReceipt.notes && (
-                <div className="pt-2 border-t border-slate-800 text-[10px] text-slate-400">
-                  Notes: {activeReceipt.notes}
+              {activeReceipt.isDeal ? (
+                <div className="space-y-3 font-sans">
+                  <div className="flex justify-between font-mono text-xs">
+                    <span className="text-slate-500">Date & Time:</span>
+                    <span className="text-slate-200">{formatISTDateTime(activeReceipt.createdAt)}</span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex justify-between items-center">
+                    <span className="text-slate-400 text-xs font-semibold uppercase">Total Trade Amount:</span>
+                    <span className="text-base font-extrabold text-white">
+                      ₹{activeReceipt.tradeAmountINR?.toLocaleString('en-IN')}
+                    </span>
+                  </div>
+
+                  {/* Customer Leg */}
+                  <div className="p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/20 space-y-1.5">
+                    <div className="text-[11px] font-bold text-indigo-400 uppercase tracking-wide flex items-center justify-between">
+                      <span>Customer Order (Buy Leg)</span>
+                      <span className="font-mono text-slate-400">{activeReceipt.customerReceiptNo}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-400">Customer:</span>
+                      <span className="font-bold text-white">{activeReceipt.customerName}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-400">Customer Rate:</span>
+                      <span className="font-mono font-bold text-amber-300">₹{activeReceipt.customerRate}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-400">USDT Delivered:</span>
+                      <span className="font-mono font-bold text-emerald-400">{activeReceipt.customerUSDT} USDT</span>
+                    </div>
+                  </div>
+
+                  {/* Banker Leg */}
+                  <div className="p-3 rounded-xl bg-purple-500/5 border border-purple-500/20 space-y-1.5">
+                    <div className="text-[11px] font-bold text-purple-400 uppercase tracking-wide flex items-center justify-between">
+                      <span>Banker Order (Sell Leg)</span>
+                      <span className="font-mono text-slate-400">{activeReceipt.bankerReceiptNo}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-400">Banker:</span>
+                      <span className="font-bold text-white">{activeReceipt.bankerName}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-400">Banker Rate:</span>
+                      <span className="font-mono font-bold text-amber-300">₹{activeReceipt.bankerRate}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-400">USDT Sourced:</span>
+                      <span className="font-mono font-bold text-amber-400">{activeReceipt.bankerUSDT} USDT</span>
+                    </div>
+                  </div>
+
+                  {/* Profit */}
+                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex justify-between items-center text-xs">
+                    <span className="font-semibold text-emerald-300">Deal Net Profit:</span>
+                    <span className="font-mono font-bold text-emerald-400 text-sm">
+                      +${activeReceipt.profitUSDT?.toFixed(2)} USDT
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1.5 font-mono">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Date:</span>
+                    <span className="text-slate-300">{formatISTDateTime(activeReceipt.createdAt)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Party Name:</span>
+                    <span className="font-bold text-white">{activeReceipt.party?.name || activeReceipt.customerName || activeReceipt.bankerName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Transaction Type:</span>
+                    <span className="font-bold text-emerald-400">{activeReceipt.type || (activeReceipt.customerReceiptNo ? 'BUY' : 'SELL')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Amount Paid:</span>
+                    <span className="font-bold text-white">₹{activeReceipt.tradeAmountINR || activeReceipt.amountGiven}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Applied Rate:</span>
+                    <span className="font-bold text-amber-300">{activeReceipt.customerRate || activeReceipt.bankerRate || activeReceipt.appliedRate}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">USDT Amount:</span>
+                    <span className="font-bold text-white">{activeReceipt.customerUSDT || activeReceipt.bankerUSDT || activeReceipt.amountReceived} USDT</span>
+                  </div>
+                </div>
+              )}
+
+              {(activeReceipt.primaryTx?.notes || activeReceipt.notes) && (
+                <div className="pt-2 border-t border-slate-800 text-[10px] text-slate-400 font-sans">
+                  Notes: {activeReceipt.primaryTx?.notes || activeReceipt.notes}
                 </div>
               )}
             </div>
@@ -882,9 +1030,9 @@ export default function TransactionsPage() {
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => window.print()}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md"
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md cursor-pointer"
               >
-                <Printer className="w-4 h-4" /> Print Receipt
+                <Printer className="w-4 h-4" /> Print Voucher
               </button>
             </div>
           </div>

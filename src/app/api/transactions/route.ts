@@ -113,6 +113,24 @@ export async function GET(req: Request) {
     const marketBuyRate = inrCurrency?.defaultBuyRate || 100;
     const marketSellRate = inrCurrency?.defaultSellRate || 100;
 
+    // Find all paired receipt numbers mentioned in notes
+    const pairedReceipts: string[] = [];
+    transactions.forEach((tx: any) => {
+      const match = tx.notes?.match(/Paired (?:Sell|Buy):\s*(NX-[\w-]+)/i);
+      if (match && match[1]) {
+        pairedReceipts.push(match[1]);
+      }
+    });
+
+    const pairedMap = new Map<string, any>();
+    if (pairedReceipts.length > 0) {
+      const pairedTxs = await prisma.transaction.findMany({
+        where: { receiptNo: { in: pairedReceipts } },
+        include: { party: true },
+      });
+      pairedTxs.forEach((p: any) => pairedMap.set(p.receiptNo, p));
+    }
+
     // Compute summary metrics for the filtered result set
     const totalCount = transactions.length;
     let totalBuyVolumeINR = 0;
@@ -134,11 +152,33 @@ export async function GET(req: Request) {
         totalSellVolumeUSDT += usdtAmt;
       }
 
-      const cleanProfit = fee;
+      const cleanProfit = (tx.totalProfit !== undefined && tx.totalProfit !== null && tx.totalProfit > 0)
+        ? tx.totalProfit
+        : fee;
+
+      let pairedInfo = null;
+      const match = tx.notes?.match(/Paired (?:Sell|Buy):\s*(NX-[\w-]+)/i);
+      if (match && match[1]) {
+        const found = pairedMap.get(match[1]) || transactions.find((t: any) => t.receiptNo === match[1]);
+        if (found) {
+          pairedInfo = {
+            id: found.id,
+            receiptNo: found.receiptNo,
+            type: found.type,
+            partyName: found.party?.name,
+            partyType: found.party?.type,
+            amountGiven: found.amountGiven,
+            amountReceived: found.amountReceived,
+            appliedRate: found.appliedRate,
+            totalProfit: found.totalProfit,
+          };
+        }
+      }
 
       return {
         ...tx,
         totalProfit: cleanProfit,
+        pairedTx: pairedInfo,
       };
     });
 
