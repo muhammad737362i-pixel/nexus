@@ -4,8 +4,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  ArrowDownLeft,
-  ArrowUpRight,
   ArrowLeftRight,
   Sparkles,
   CheckCircle2,
@@ -18,16 +16,14 @@ import {
 } from 'lucide-react';
 import { getWorkingDateTimeISO } from '@/lib/dateUtils';
 
-export type TradeMode = 'DEAL' | 'BUY' | 'SELL';
+export type TradeMode = 'DEAL';
 
 interface TradeTerminalProps {
-  initialMode?: TradeMode;
+  initialMode?: string;
 }
 
-export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalProps) {
+export default function TradeTerminal({ initialMode }: TradeTerminalProps = {}) {
   const router = useRouter();
-
-  const [mode, setMode] = useState<TradeMode>(initialMode);
 
   // Parties & Currencies lists
   const [customers, setCustomers] = useState<any[]>([]);
@@ -51,8 +47,7 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
     if (newMode === inputCurrencyMode) return;
     const numAmt = parseFloat(amountInput);
     const numBR = parseFloat(buyRate) || 0;
-    const numSR = parseFloat(sellRate) || 0;
-    const rateToUse = mode === 'SELL' ? numSR : numBR;
+    const rateToUse = numBR > 0 ? numBR : 1;
 
     if (!isNaN(numAmt) && numAmt > 0 && rateToUse > 0) {
       if (newMode === 'USDT') {
@@ -198,7 +193,7 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
     bankerCollectionINR = Number((numAmount * numSellRate).toFixed(2));
   }
 
-  const effectiveUSDT = mode === 'SELL' ? bankerUSDT : customerUSDT;
+  const effectiveUSDT = customerUSDT;
   const grossProfitUSDT = (customerUSDT > 0 && bankerUSDT > 0) ? Number((customerUSDT - bankerUSDT).toFixed(4)) : 0;
   const grossProfitINR = Number((bankerCollectionINR - customerPayoutINR).toFixed(2));
   const spreadPerUnit = Number((numSellRate - numBuyRate).toFixed(3));
@@ -213,160 +208,76 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
     e.preventDefault();
     setErrorMsg('');
 
-    if (mode === 'DEAL') {
-      if (!selectedCustomerId) {
-        setErrorMsg('Please select a Customer');
-        return;
-      }
-      if (!selectedBankerId) {
-        setErrorMsg('Please select a Banker');
-        return;
-      }
-      if (numAmount <= 0) {
-        setErrorMsg(`Please enter a valid trade amount in ${inputCurrencyMode}`);
-        return;
-      }
-      if (effectiveUSDT <= 0) {
-        setErrorMsg('Calculated trade volume is invalid');
-        return;
-      }
-      if (numBuyRate <= 0 || numSellRate <= 0) {
-        setErrorMsg('Valid Buy Rate and Sell Rate are required');
-        return;
-      }
+    if (!selectedCustomerId) {
+      setErrorMsg('Please select a Customer');
+      return;
+    }
+    if (!selectedBankerId) {
+      setErrorMsg('Please select a Banker');
+      return;
+    }
+    if (numAmount <= 0) {
+      setErrorMsg(`Please enter a valid trade amount in ${inputCurrencyMode}`);
+      return;
+    }
+    if (effectiveUSDT <= 0) {
+      setErrorMsg('Calculated trade volume is invalid');
+      return;
+    }
+    if (numBuyRate <= 0 || numSellRate <= 0) {
+      setErrorMsg('Valid Buy Rate and Sell Rate are required');
+      return;
+    }
 
-      setSubmitting(true);
-      try {
-        const res = await fetch('/api/transactions/deal', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            customerId: selectedCustomerId,
-            bankerId: selectedBankerId,
-            fromCurrency: fiatCurrency,
-            toCurrency: assetCurrency,
-            usdtAmount: effectiveUSDT,
-            buyUsdtAmount: customerUSDT,
-            sellUsdtAmount: bankerUSDT,
-            buyRate: numBuyRate,
-            sellRate: numSellRate,
-            buyAmountINR: customerPayoutINR,
-            sellAmountINR: bankerCollectionINR,
-            buyPaymentMethod: 'CASH',
-            sellPaymentMethod: 'CASH',
-            createdAt: customDateTime || undefined,
-          }),
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/transactions/deal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerId: selectedCustomerId,
+          bankerId: selectedBankerId,
+          fromCurrency: fiatCurrency,
+          toCurrency: assetCurrency,
+          usdtAmount: effectiveUSDT,
+          buyUsdtAmount: customerUSDT,
+          sellUsdtAmount: bankerUSDT,
+          buyRate: numBuyRate,
+          sellRate: numSellRate,
+          buyAmountINR: customerPayoutINR,
+          sellAmountINR: bankerCollectionINR,
+          buyPaymentMethod: 'CASH',
+          sellPaymentMethod: 'CASH',
+          createdAt: customDateTime || undefined,
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        setSuccessReceipts({
+          type: 'DEAL',
+          buyTransaction: json.buyTransaction,
+          sellTransaction: json.sellTransaction,
+          grossProfitINR: json.grossProfitINR,
+          grossProfitUSDT: json.grossProfitUSDT,
+          spreadPerUSDT: json.spreadPerUSDT,
+          customerName: selectedCustomer?.name,
+          bankerName: selectedBanker?.name,
+          customerUSDT,
+          bankerUSDT,
+          payoutINR: customerPayoutINR,
+          collectionINR: bankerCollectionINR,
+          usdtAmount: effectiveUSDT,
         });
-
-        const json = await res.json();
-        if (json.success) {
-          setSuccessReceipts({
-            type: 'DEAL',
-            buyTransaction: json.buyTransaction,
-            sellTransaction: json.sellTransaction,
-            grossProfitINR: json.grossProfitINR,
-            grossProfitUSDT: json.grossProfitUSDT,
-            spreadPerUSDT: json.spreadPerUSDT,
-            customerName: selectedCustomer?.name,
-            bankerName: selectedBanker?.name,
-            customerUSDT,
-            bankerUSDT,
-            payoutINR: customerPayoutINR,
-            collectionINR: bankerCollectionINR,
-            usdtAmount: effectiveUSDT,
-          });
-          setCustomDateTime(getWorkingDateTimeISO());
-          setAmountInput('');
-        } else {
-          setErrorMsg(json.error || 'Failed to record transaction deal');
-        }
-      } catch (err: any) {
-        setErrorMsg(err.message || 'Error submitting deal');
-      } finally {
-        setSubmitting(false);
+        setCustomDateTime(getWorkingDateTimeISO());
+        setAmountInput('');
+      } else {
+        setErrorMsg(json.error || 'Failed to record transaction deal');
       }
-    } else if (mode === 'BUY') {
-      if (!selectedCustomerId || customerPayoutINR <= 0 || numBuyRate <= 0) {
-        setErrorMsg('Please enter valid buy parameters');
-        return;
-      }
-
-      setSubmitting(true);
-      try {
-        const res = await fetch('/api/transactions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'BUY',
-            partyId: selectedCustomerId,
-            fromCurrency: fiatCurrency,
-            toCurrency: assetCurrency,
-            amountGiven: customerPayoutINR,
-            appliedRate: numBuyRate,
-            fee: 0,
-            paymentMethod: 'CASH',
-            createdAt: customDateTime || undefined,
-          }),
-        });
-
-        const json = await res.json();
-        if (json.success) {
-          setSuccessReceipts({
-            type: 'BUY',
-            buyTransaction: json.transaction,
-            customerName: selectedCustomer?.name,
-          });
-          setCustomDateTime(getWorkingDateTimeISO());
-          setAmountInput('');
-        } else {
-          setErrorMsg(json.error || 'Failed to execute buy transaction');
-        }
-      } catch (err: any) {
-        setErrorMsg(err.message || 'Error submitting buy order');
-      } finally {
-        setSubmitting(false);
-      }
-    } else if (mode === 'SELL') {
-      if (!selectedBankerId || bankerCollectionINR <= 0 || numSellRate <= 0) {
-        setErrorMsg('Please enter valid sell parameters');
-        return;
-      }
-
-      setSubmitting(true);
-      try {
-        const res = await fetch('/api/transactions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'SELL',
-            partyId: selectedBankerId,
-            fromCurrency: fiatCurrency,
-            toCurrency: assetCurrency,
-            amountGiven: bankerCollectionINR,
-            appliedRate: numSellRate,
-            fee: 0,
-            paymentMethod: 'CASH',
-            createdAt: customDateTime || undefined,
-          }),
-        });
-
-        const json = await res.json();
-        if (json.success) {
-          setSuccessReceipts({
-            type: 'SELL',
-            sellTransaction: json.transaction,
-            bankerName: selectedBanker?.name,
-          });
-          setCustomDateTime(getWorkingDateTimeISO());
-          setAmountInput('');
-        } else {
-          setErrorMsg(json.error || 'Failed to execute sell transaction');
-        }
-      } catch (err: any) {
-        setErrorMsg(err.message || 'Error submitting sell order');
-      } finally {
-        setSubmitting(false);
-      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Error submitting deal');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -387,50 +298,11 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
             <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
               <ArrowLeftRight className="w-5 h-5" />
             </div>
-            {mode === 'DEAL' ? 'New Trade Transaction' : mode === 'BUY' ? 'Buy Currency' : 'Sell Currency'}
+            New Trade Transaction
           </h1>
           <p className="text-slate-400 text-sm mt-1">
-            {mode === 'DEAL'
-              ? 'Select Customer and Banker to record the trade deal. Rates are auto-applied from the Rates Setup.'
-              : 'Record a single transaction leg with configured party rates.'}
+            Select Customer and Banker to record the trade deal. Rates are auto-applied from the Rates Setup.
           </p>
-        </div>
-
-        {/* Mode Switcher */}
-        <div className="flex items-center gap-1 p-1 bg-slate-900 border border-slate-800 rounded-xl">
-          <button
-            type="button"
-            onClick={() => setMode('DEAL')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-              mode === 'DEAL'
-                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <ArrowLeftRight className="w-3.5 h-3.5" /> Deal (Customer + Banker)
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode('BUY')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-              mode === 'BUY'
-                ? 'bg-emerald-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <ArrowDownLeft className="w-3.5 h-3.5" /> Buy Only
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode('SELL')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-              mode === 'SELL'
-                ? 'bg-amber-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <ArrowUpRight className="w-3.5 h-3.5" /> Sell Only
-          </button>
         </div>
       </div>
 
@@ -442,16 +314,10 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
               <CheckCircle2 className="w-7 h-7 text-emerald-400 shrink-0" />
               <div>
                 <h3 className="font-bold text-lg text-emerald-300">
-                  {successReceipts.type === 'DEAL'
-                    ? 'Transaction Deal Recorded Successfully!'
-                    : successReceipts.type === 'BUY'
-                    ? 'Buy Transaction Executed!'
-                    : 'Sell Transaction Executed!'}
+                  Transaction Deal Recorded Successfully!
                 </h3>
                 <p className="text-xs text-slate-300">
-                  {successReceipts.type === 'DEAL'
-                    ? 'Customer Buy and Banker Sell transactions were added automatically.'
-                    : 'Transaction was added to the master ledger.'}
+                  Customer Buy and Banker Sell transactions were added automatically.
                 </p>
               </div>
             </div>
@@ -464,57 +330,29 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
           </div>
 
           {/* Deal Confirmation Summary */}
-          {successReceipts.type === 'DEAL' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-900/90 p-4 rounded-xl border border-slate-800 text-xs">
-              <div className="space-y-1">
-                <span className="text-slate-400 block text-[11px] font-semibold">Customer (Buy Leg)</span>
-                <div className="font-bold text-white text-sm">{successReceipts.customerName}</div>
-                <div className="text-emerald-400 font-mono font-bold text-sm">
-                  {successReceipts.customerUSDT ?? successReceipts.usdtAmount} USDT
-                </div>
-                <div className="text-slate-500 font-mono text-[11px]">
-                  Receipt: <span className="text-white">{successReceipts.buyTransaction.receiptNo}</span>
-                </div>
-              </div>
-
-              <div className="space-y-1 sm:border-l sm:border-slate-800 sm:pl-4">
-                <span className="text-slate-400 block text-[11px] font-semibold">Banker (Sell Leg)</span>
-                <div className="font-bold text-white text-sm">{successReceipts.bankerName}</div>
-                <div className="text-amber-400 font-mono font-bold text-sm">
-                  {successReceipts.bankerUSDT ?? successReceipts.usdtAmount} USDT
-                </div>
-                <div className="text-slate-500 font-mono text-[11px]">
-                  Receipt: <span className="text-white">{successReceipts.sellTransaction.receiptNo}</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {successReceipts.type === 'BUY' && (
-            <div className="bg-slate-900/90 p-4 rounded-xl border border-slate-800 text-xs space-y-1">
-              <span className="text-slate-400 block text-[11px] font-semibold">Customer (Buy Order)</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-900/90 p-4 rounded-xl border border-slate-800 text-xs">
+            <div className="space-y-1">
+              <span className="text-slate-400 block text-[11px] font-semibold">Customer (Buy Leg)</span>
               <div className="font-bold text-white text-sm">{successReceipts.customerName}</div>
-              <div className="text-emerald-400 font-mono font-bold">
-                Paid ₹{successReceipts.buyTransaction.amountGiven.toLocaleString()} for {successReceipts.buyTransaction.amountReceived} USDT
+              <div className="text-emerald-400 font-mono font-bold text-sm">
+                {successReceipts.customerUSDT ?? successReceipts.usdtAmount} USDT
               </div>
               <div className="text-slate-500 font-mono text-[11px]">
-                Receipt: <span className="text-white">{successReceipts.buyTransaction.receiptNo}</span>
+                Receipt: <span className="text-white">{successReceipts.buyTransaction?.receiptNo}</span>
               </div>
             </div>
-          )}
 
-          {successReceipts.type === 'SELL' && (
-            <div className="bg-slate-900/90 p-4 rounded-xl border border-slate-800 text-xs space-y-1">
-              <span className="text-slate-400 block text-[11px] font-semibold">Banker (Sell Order)</span>
+            <div className="space-y-1 sm:border-l sm:border-slate-800 sm:pl-4">
+              <span className="text-slate-400 block text-[11px] font-semibold">Banker (Sell Leg)</span>
               <div className="font-bold text-white text-sm">{successReceipts.bankerName}</div>
-              <div className="text-amber-400 font-mono font-bold">
-                Collected ₹{successReceipts.sellTransaction.amountGiven.toLocaleString()} for {successReceipts.sellTransaction.amountReceived} USDT
+              <div className="text-amber-400 font-mono font-bold text-sm">
+                {successReceipts.bankerUSDT ?? successReceipts.usdtAmount} USDT
               </div>
               <div className="text-slate-500 font-mono text-[11px]">
-                Receipt: <span className="text-white">{successReceipts.sellTransaction.receiptNo}</span>
+                Receipt: <span className="text-white">{successReceipts.sellTransaction?.receiptNo}</span>
               </div>
             </div>
-          )}
+          </div>
 
           {/* Action Buttons */}
           <div className="flex flex-wrap gap-3 pt-1">
@@ -550,80 +388,76 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
             <h2 className="text-sm font-bold text-white uppercase tracking-wider">Select Counterparties</h2>
           </div>
 
-          <div className={`grid grid-cols-1 ${mode === 'DEAL' ? 'sm:grid-cols-2' : ''} gap-4`}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Customer Dropdown */}
-            {(mode === 'DEAL' || mode === 'BUY') && (
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                    <Users className="w-4 h-4 text-emerald-400" /> Select Customer *
-                  </label>
-                  {isCustomBuyRate && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30 flex items-center gap-1">
-                      <Sparkles className="w-2.5 h-2.5" /> Custom Rate Active
-                    </span>
-                  )}
-                </div>
-                <select
-                  value={selectedCustomerId}
-                  onChange={(e) => setSelectedCustomerId(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm font-medium focus:outline-none focus:border-indigo-500"
-                >
-                  {customers.length === 0 ? (
-                    <option value="">No customers found</option>
-                  ) : (
-                    customers.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} {c.phone ? `(${c.phone})` : ''}
-                      </option>
-                    ))
-                  )}
-                </select>
-                {selectedCustomer && (
-                  <div className="text-[11px] text-slate-400 flex justify-between px-1">
-                    <span>Contact: <strong className="text-slate-300">{selectedCustomer.phone || 'N/A'}</strong></span>
-                    <span>Rate Applied: <strong className="text-emerald-400 font-mono">₹{buyRate}</strong></span>
-                  </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <Users className="w-4 h-4 text-emerald-400" /> Select Customer *
+                </label>
+                {isCustomBuyRate && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30 flex items-center gap-1">
+                    <Sparkles className="w-2.5 h-2.5" /> Custom Rate Active
+                  </span>
                 )}
               </div>
-            )}
+              <select
+                value={selectedCustomerId}
+                onChange={(e) => setSelectedCustomerId(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm font-medium focus:outline-none focus:border-indigo-500"
+              >
+                {customers.length === 0 ? (
+                  <option value="">No customers found</option>
+                ) : (
+                  customers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} {c.phone ? `(${c.phone})` : ''}
+                    </option>
+                  ))
+                )}
+              </select>
+              {selectedCustomer && (
+                <div className="text-[11px] text-slate-400 flex justify-between px-1">
+                  <span>Contact: <strong className="text-slate-300">{selectedCustomer.phone || 'N/A'}</strong></span>
+                  <span>Rate Applied: <strong className="text-emerald-400 font-mono">₹{buyRate}</strong></span>
+                </div>
+              )}
+            </div>
 
             {/* Banker Dropdown */}
-            {(mode === 'DEAL' || mode === 'SELL') && (
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                    <Building2 className="w-4 h-4 text-amber-400" /> Select Banker *
-                  </label>
-                  {isCustomSellRate && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30 flex items-center gap-1">
-                      <Sparkles className="w-2.5 h-2.5" /> Custom Rate Active
-                    </span>
-                  )}
-                </div>
-                <select
-                  value={selectedBankerId}
-                  onChange={(e) => setSelectedBankerId(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm font-medium focus:outline-none focus:border-indigo-500"
-                >
-                  {bankers.length === 0 ? (
-                    <option value="">No bankers found</option>
-                  ) : (
-                    bankers.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name} {b.phone ? `(${b.phone})` : ''}
-                      </option>
-                    ))
-                  )}
-                </select>
-                {selectedBanker && (
-                  <div className="text-[11px] text-slate-400 flex justify-between px-1">
-                    <span>Contact: <strong className="text-slate-300">{selectedBanker.phone || 'N/A'}</strong></span>
-                    <span>Rate Applied: <strong className="text-amber-400 font-mono">₹{sellRate}</strong></span>
-                  </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <Building2 className="w-4 h-4 text-amber-400" /> Select Banker *
+                </label>
+                {isCustomSellRate && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30 flex items-center gap-1">
+                    <Sparkles className="w-2.5 h-2.5" /> Custom Rate Active
+                  </span>
                 )}
               </div>
-            )}
+              <select
+                value={selectedBankerId}
+                onChange={(e) => setSelectedBankerId(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm font-medium focus:outline-none focus:border-indigo-500"
+              >
+                {bankers.length === 0 ? (
+                  <option value="">No bankers found</option>
+                ) : (
+                  bankers.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name} {b.phone ? `(${b.phone})` : ''}
+                    </option>
+                  ))
+                )}
+              </select>
+              {selectedBanker && (
+                <div className="text-[11px] text-slate-400 flex justify-between px-1">
+                  <span>Contact: <strong className="text-slate-300">{selectedBanker.phone || 'N/A'}</strong></span>
+                  <span>Rate Applied: <strong className="text-amber-400 font-mono">₹{sellRate}</strong></span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -716,52 +550,50 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
             </h2>
           </div>
 
-          <div className={`grid grid-cols-1 ${mode === 'DEAL' ? 'sm:grid-cols-2' : ''} gap-4`}>
-            {(mode === 'DEAL' || mode === 'BUY') && (
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-300">
-                    Customer Buy Rate (₹) *
-                  </label>
-                  {isCustomBuyRate && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30 flex items-center gap-1">
-                      <Sparkles className="w-2.5 h-2.5" /> Party Custom Rate
-                    </span>
-                  )}
-                </div>
-                <input
-                  type="number"
-                  step="any"
-                  value={buyRate}
-                  onChange={(e) => setBuyRate(e.target.value)}
-                  placeholder="e.g. 100.3"
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-amber-300 font-bold text-sm focus:outline-none focus:border-amber-500"
-                />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Customer Buy Rate */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-300">
+                  Customer Buy Rate (₹) *
+                </label>
+                {isCustomBuyRate && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30 flex items-center gap-1">
+                    <Sparkles className="w-2.5 h-2.5" /> Party Custom Rate
+                  </span>
+                )}
               </div>
-            )}
+              <input
+                type="number"
+                step="any"
+                value={buyRate}
+                onChange={(e) => setBuyRate(e.target.value)}
+                placeholder="e.g. 100.3"
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-amber-300 font-bold text-sm focus:outline-none focus:border-amber-500"
+              />
+            </div>
 
-            {(mode === 'DEAL' || mode === 'SELL') && (
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-300">
-                    Banker Sell Rate (₹) *
-                  </label>
-                  {isCustomSellRate && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30 flex items-center gap-1">
-                      <Sparkles className="w-2.5 h-2.5" /> Party Custom Rate
-                    </span>
-                  )}
-                </div>
-                <input
-                  type="number"
-                  step="any"
-                  value={sellRate}
-                  onChange={(e) => setSellRate(e.target.value)}
-                  placeholder="e.g. 101.0"
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-amber-300 font-bold text-sm focus:outline-none focus:border-amber-500"
-                />
+            {/* Banker Sell Rate */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-300">
+                  Banker Sell Rate (₹) *
+                </label>
+                {isCustomSellRate && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30 flex items-center gap-1">
+                    <Sparkles className="w-2.5 h-2.5" /> Party Custom Rate
+                  </span>
+                )}
               </div>
-            )}
+              <input
+                type="number"
+                step="any"
+                value={sellRate}
+                onChange={(e) => setSellRate(e.target.value)}
+                placeholder="e.g. 101.0"
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-amber-300 font-bold text-sm focus:outline-none focus:border-amber-500"
+              />
+            </div>
           </div>
         </div>
 
@@ -777,20 +609,10 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
                 <RefreshCw className="w-5 h-5 animate-spin" />
                 Recording Transactions...
               </>
-            ) : mode === 'DEAL' ? (
+            ) : (
               <>
                 <ArrowLeftRight className="w-5 h-5" />
                 Confirm & Record Transaction Deal
-              </>
-            ) : mode === 'BUY' ? (
-              <>
-                <ArrowDownLeft className="w-5 h-5" />
-                Execute Buy Transaction
-              </>
-            ) : (
-              <>
-                <ArrowUpRight className="w-5 h-5" />
-                Execute Sell Transaction
               </>
             )}
           </button>
