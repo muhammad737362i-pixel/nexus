@@ -797,96 +797,59 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
           </div>
         </div>
 
-        {/* Step 3: Automatic Deal Calculation & Rates Display */}
+        {/* Step 3: Custom Rates */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
-            <div className="flex items-center gap-2">
-              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold">3</span>
-              <h2 className="text-sm font-bold text-white uppercase tracking-wider">
-                Converted USDT
-              </h2>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowRateOverrides(!showRateOverrides)}
-              className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1 transition"
-            >
-              {showRateOverrides ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-              {showRateOverrides ? 'Hide Rate Inputs' : 'Edit Rates Manually'}
-            </button>
+          <div className="flex items-center gap-2 pb-2 border-b border-slate-800/80">
+            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold">3</span>
+            <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+              Custom Rates
+            </h2>
           </div>
 
-          {/* Rate Override Inputs (Optional Toggle) */}
-          {showRateOverrides && (
-            <div className="p-4 bg-slate-950/90 rounded-xl border border-indigo-500/30 grid grid-cols-1 sm:grid-cols-2 gap-4 animate-fadeIn">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-300">
-                  Customer Buy Rate (₹)
-                </label>
+          <div className={`grid grid-cols-1 ${mode === 'DEAL' ? 'sm:grid-cols-2' : ''} gap-4`}>
+            {(mode === 'DEAL' || mode === 'BUY') && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-300">
+                    Customer Buy Rate (₹) *
+                  </label>
+                  {isCustomBuyRate && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30 flex items-center gap-1">
+                      <Sparkles className="w-2.5 h-2.5" /> Party Custom Rate
+                    </span>
+                  )}
+                </div>
                 <input
                   type="number"
                   step="any"
                   value={buyRate}
                   onChange={(e) => setBuyRate(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-amber-300 font-bold text-sm focus:outline-none focus:border-amber-500"
+                  placeholder="e.g. 100.3"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-amber-300 font-bold text-sm focus:outline-none focus:border-amber-500"
                 />
               </div>
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-300">
-                  Banker Sell Rate (₹)
-                </label>
+            )}
+
+            {(mode === 'DEAL' || mode === 'SELL') && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-300">
+                    Banker Sell Rate (₹) *
+                  </label>
+                  {isCustomSellRate && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30 flex items-center gap-1">
+                      <Sparkles className="w-2.5 h-2.5" /> Party Custom Rate
+                    </span>
+                  )}
+                </div>
                 <input
                   type="number"
                   step="any"
                   value={sellRate}
                   onChange={(e) => setSellRate(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-amber-300 font-bold text-sm focus:outline-none focus:border-amber-500"
+                  placeholder="e.g. 101.0"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-amber-300 font-bold text-sm focus:outline-none focus:border-amber-500"
                 />
-              </div>
-            </div>
-          )}
-
-          {/* Converted USDT Display */}
-          <div className="rounded-2xl p-5 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border border-indigo-500/30">
-            {mode === 'DEAL' ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Customer USDT */}
-                <div className="space-y-1.5 p-4 rounded-xl bg-slate-900/80 border border-slate-800">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-                    Customer USDT
-                  </span>
-                  <div className="text-2xl font-extrabold text-emerald-400 font-mono">
-                    {numAmount > 0 ? `${customerUSDT.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} USDT` : '0.00 USDT'}
-                  </div>
-                </div>
-
-                {/* Banker USDT */}
-                <div className="space-y-1.5 p-4 rounded-xl bg-slate-900/80 border border-slate-800">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-                    Banker USDT
-                  </span>
-                  <div className="text-2xl font-extrabold text-amber-400 font-mono">
-                    {numAmount > 0 ? `${bankerUSDT.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} USDT` : '0.00 USDT'}
-                  </div>
-                </div>
-              </div>
-            ) : mode === 'BUY' ? (
-              <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-                  Customer USDT
-                </span>
-                <div className="text-2xl font-extrabold text-emerald-400 font-mono mt-1">
-                  {numAmount > 0 ? `${customerUSDT.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} USDT` : '0.00 USDT'}
-                </div>
-              </div>
-            ) : (
-              <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-                  Banker USDT
-                </span>
-                <div className="text-2xl font-extrabold text-amber-400 font-mono mt-1">
-                  {numAmount > 0 ? `${bankerUSDT.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} USDT` : '0.00 USDT'}
-                </div>
               </div>
             )}
           </div>
