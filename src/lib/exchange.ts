@@ -297,9 +297,9 @@ export async function processSellTransaction(params: {
 }
 
 /**
- * Generates two sequential unique receipt numbers for a paired trade deal
+ * Generates sequential unique receipt numbers for transactions
  */
-export async function generateTwoSequentialReceiptNos(): Promise<[string, string]> {
+export async function generateSequentialReceiptNos(count: number): Promise<string[]> {
   const year = new Date().getFullYear();
   const prefix = `NX-${year}-`;
 
@@ -318,20 +318,26 @@ export async function generateTwoSequentialReceiptNos(): Promise<[string, string
     }
   }
 
-  let candidate1 = `${prefix}${nextNum}`;
-  while (await prisma.transaction.findUnique({ where: { receiptNo: candidate1 } })) {
+  const receipts: string[] = [];
+  for (let i = 0; i < count; i++) {
+    let candidate = `${prefix}${nextNum}`;
+    while ((await prisma.transaction.findUnique({ where: { receiptNo: candidate } })) || receipts.includes(candidate)) {
+      nextNum++;
+      candidate = `${prefix}${nextNum}`;
+    }
+    receipts.push(candidate);
     nextNum++;
-    candidate1 = `${prefix}${nextNum}`;
   }
 
-  nextNum++;
-  let candidate2 = `${prefix}${nextNum}`;
-  while (await prisma.transaction.findUnique({ where: { receiptNo: candidate2 } })) {
-    nextNum++;
-    candidate2 = `${prefix}${nextNum}`;
-  }
+  return receipts;
+}
 
-  return [candidate1, candidate2];
+/**
+ * Generates two sequential unique receipt numbers for a paired trade deal
+ */
+export async function generateTwoSequentialReceiptNos(): Promise<[string, string]> {
+  const list = await generateSequentialReceiptNos(2);
+  return [list[0], list[1]];
 }
 
 /**
@@ -547,6 +553,286 @@ export async function processPairedDealTransaction(params: {
       grossProfitINR,
       grossProfitUSDT,
       spreadPerUSDT: Number((sellRate - buyRate).toFixed(4)),
+    };
+  });
+}
+
+export interface BankerSplitAllocation {
+  bankerId: string;
+  amountINR: number;
+  sellRate: number;
+  sellPaymentMethod?: string;
+  fee?: number;
+}
+
+export interface MultiBankerDealParams {
+  customerId: string;
+  fromCurrency?: string; // Default 'INR'
+  toCurrency?: string;   // Default 'USDT'
+  totalAmountINR: number;
+  customerBuyRate: number;
+  customerPaymentMethod?: string;
+  customerFee?: number;
+  bankers: BankerSplitAllocation[];
+  notes?: string;
+  createdAt?: Date | string;
+}
+
+/**
+ * Processes Multi-Banker Split Deal Transaction
+ * Atomically records paired deals for 1 customer split across 1 or more bankers
+ */
+export async function processMultiBankerDealTransaction(params: MultiBankerDealParams) {
+  const {
+    customerId,
+    fromCurrency = 'INR',
+    toCurrency = 'USDT',
+    totalAmountINR,
+    customerBuyRate,
+    customerPaymentMethod = 'CASH',
+    customerFee = 0,
+    bankers,
+    notes,
+    createdAt,
+  } = params;
+
+  if (!customerId) {
+    throw new Error('Customer must be selected for the deal');
+  }
+  if (!bankers || bankers.length === 0) {
+    throw new Error('At least one Banker must be selected for the deal');
+  }
+  if (totalAmountINR <= 0) {
+    throw new Error('Total trade amount must be greater than 0');
+  }
+  if (customerBuyRate <= 0) {
+    throw new Error('Customer Buy rate must be greater than 0');
+  }
+
+  // Verify allocations sum to totalAmountINR
+  const allocatedSum = bankers.reduce((sum, b) => sum + (Number(b.amountINR) || 0), 0);
+  if (Math.abs(allocatedSum - totalAmountINR) > 0.05) {
+    throw new Error(
+      `Banker allocations total (₹${allocatedSum.toLocaleString('en-IN')}) does not match trade amount (₹${totalAmountINR.toLocaleString('en-IN')})`
+    );
+  }
+
+  // Fetch customer and all bankers
+  const [customer, bankerParties] = await Promise.all([
+    prisma.party.findUnique({ where: { id: customerId } }),
+    prisma.party.findMany({ where: { id: { in: bankers.map((b) => b.bankerId) } } }),
+  ]);
+
+  if (!customer) throw new Error('Customer not found');
+  const bankerMap = new Map<string, any>();
+  bankerParties.forEach((bp) => bankerMap.set(bp.id, bp));
+
+  for (const b of bankers) {
+    if (!bankerMap.has(b.bankerId)) {
+      throw new Error(`Banker with ID ${b.bankerId} not found`);
+    }
+    if (!b.sellRate || b.sellRate <= 0) {
+      throw new Error(`Invalid sell rate for banker ${bankerMap.get(b.bankerId)?.name}`);
+    }
+    if (!b.amountINR || b.amountINR <= 0) {
+      throw new Error(`Invalid allocation amount for banker ${bankerMap.get(b.bankerId)?.name}`);
+    }
+  }
+
+  // Generate unique Deal Group ID: DLG-YYYY-XXXX
+  const year = new Date().getFullYear();
+  const groupTime = Date.now().toString().slice(-4);
+  const groupRand = Math.floor(100 + Math.random() * 900);
+  const dealGroupId = `DLG-${year}-${groupTime}${groupRand}`;
+
+  // Sequential receipts: 2 receipts per banker (1 Customer BUY leg, 1 Banker SELL leg)
+  const totalReceiptsNeeded = bankers.length * 2;
+  const receipts = await generateSequentialReceiptNos(totalReceiptsNeeded);
+
+  const txDate = parseISTDate(createdAt);
+
+  return await prisma.$transaction(async (tx: any) => {
+    const legsResult: any[] = [];
+    let totalCustomerUSDT = 0;
+    let totalBankerUSDT = 0;
+    let totalDealProfitUSDT = 0;
+
+    for (let i = 0; i < bankers.length; i++) {
+      const b = bankers[i];
+      const bankerParty = bankerMap.get(b.bankerId);
+      const buyReceiptNo = receipts[i * 2];
+      const sellReceiptNo = receipts[i * 2 + 1];
+
+      const legAmountINR = Number(Number(b.amountINR).toFixed(2));
+      const legCustomerUSDT = Number((legAmountINR / customerBuyRate).toFixed(4));
+      const legBankerUSDT = Number((legAmountINR / b.sellRate).toFixed(4));
+      const legProfitUSDT = Number((legCustomerUSDT - legBankerUSDT).toFixed(4));
+
+      totalCustomerUSDT += legCustomerUSDT;
+      totalBankerUSDT += legBankerUSDT;
+      totalDealProfitUSDT += legProfitUSDT;
+
+      const isSplit = bankers.length > 1;
+      const splitTag = isSplit
+        ? `Split Leg ${i + 1}/${bankers.length} | Group: ${dealGroupId} | Total Deal: ₹${totalAmountINR}`
+        : `Group: ${dealGroupId}`;
+
+      const buyNotes = notes
+        ? `${notes} | ${splitTag} | Paired Sell: ${sellReceiptNo}`
+        : `${splitTag} | Paired Sell: ${sellReceiptNo}`;
+
+      const sellNotes = notes
+        ? `${notes} | ${splitTag} | Paired Buy: ${buyReceiptNo}`
+        : `${splitTag} | Paired Buy: ${buyReceiptNo}`;
+
+      // 1. BUY transaction (Customer)
+      const buyTx = await tx.transaction.create({
+        data: {
+          receiptNo: buyReceiptNo,
+          type: 'BUY',
+          partyId: customerId,
+          fromCurrency,
+          toCurrency,
+          amountGiven: legAmountINR,
+          amountReceived: legCustomerUSDT,
+          appliedRate: customerBuyRate,
+          fee: i === 0 ? customerFee : 0,
+          totalProfit: 0,
+          paymentMethod: customerPaymentMethod,
+          status: 'COMPLETED',
+          notes: buyNotes,
+          ...(txDate ? { createdAt: txDate } : {}),
+        },
+        include: { party: true },
+      });
+
+      // 2. SELL transaction (Banker) - holds profit for this leg
+      const sellTx = await tx.transaction.create({
+        data: {
+          receiptNo: sellReceiptNo,
+          type: 'SELL',
+          partyId: b.bankerId,
+          fromCurrency,
+          toCurrency,
+          amountGiven: legAmountINR,
+          amountReceived: legBankerUSDT,
+          appliedRate: b.sellRate,
+          fee: b.fee || 0,
+          totalProfit: legProfitUSDT,
+          paymentMethod: b.sellPaymentMethod || 'CASH',
+          status: 'COMPLETED',
+          notes: sellNotes,
+          ...(txDate ? { createdAt: txDate } : {}),
+        },
+        include: { party: true },
+      });
+
+      // 3. Ledger entries
+      // Customer Payout (CREDIT)
+      await tx.ledgerEntry.create({
+        data: {
+          partyId: customerId,
+          transactionId: buyTx.id,
+          currencyCode: fromCurrency,
+          type: 'CREDIT',
+          amount: legAmountINR,
+          balanceAfter: legAmountINR,
+          notes: `Payout for Buy order (${buyReceiptNo}) [Deal with ${bankerParty.name}${isSplit ? ` - Part ${i + 1}/${bankers.length}` : ''}]`,
+          ...(txDate ? { createdAt: txDate } : {}),
+        },
+      });
+
+      // Banker Collection (DEBIT)
+      await tx.ledgerEntry.create({
+        data: {
+          partyId: b.bankerId,
+          transactionId: sellTx.id,
+          currencyCode: fromCurrency,
+          type: 'DEBIT',
+          amount: legAmountINR,
+          balanceAfter: legAmountINR,
+          notes: `Sell trade payment received (${sellReceiptNo}) [Deal with ${customer.name}${isSplit ? ` - Part ${i + 1}/${bankers.length}` : ''}]`,
+          ...(txDate ? { createdAt: txDate } : {}),
+        },
+      });
+
+      // 4. Update Inventory
+      // Customer Payout INR decreases INR inventory
+      const custMethodField = customerPaymentMethod === 'BANK' ? 'bankBalance' : 'cashBalance';
+      let invINRCust = await tx.currencyInventory.findUnique({ where: { currencyCode: fromCurrency } });
+      if (!invINRCust) {
+        invINRCust = await tx.currencyInventory.create({ data: { currencyCode: fromCurrency, cashBalance: 0, bankBalance: 0 } });
+      }
+      const postBuyINR = Math.max(0, invINRCust[custMethodField] - legAmountINR);
+      await tx.currencyInventory.update({
+        where: { currencyCode: fromCurrency },
+        data: { [custMethodField]: Number(postBuyINR.toFixed(2)) },
+      });
+
+      // Banker Collection INR increases INR inventory
+      const bankerMethod = b.sellPaymentMethod || 'CASH';
+      const bankerMethodField = bankerMethod === 'BANK' ? 'bankBalance' : 'cashBalance';
+      let invINRBank = await tx.currencyInventory.findUnique({ where: { currencyCode: fromCurrency } });
+      const postSellINR = (invINRBank ? invINRBank[bankerMethodField] : 0) + legAmountINR;
+      await tx.currencyInventory.update({
+        where: { currencyCode: fromCurrency },
+        data: { [bankerMethodField]: Number(postSellINR.toFixed(2)) },
+      });
+
+      // USDT Inventory:
+      let invUSDT = await tx.currencyInventory.findUnique({ where: { currencyCode: toCurrency } });
+      if (!invUSDT) {
+        invUSDT = await tx.currencyInventory.create({ data: { currencyCode: toCurrency, cashBalance: 0, bankBalance: 0 } });
+      }
+      if (customerPaymentMethod !== bankerMethod) {
+        const newBuyBal = invUSDT[custMethodField] + legCustomerUSDT;
+        const newSellBal = Math.max(0, invUSDT[bankerMethodField] - legBankerUSDT);
+        await tx.currencyInventory.update({
+          where: { currencyCode: toCurrency },
+          data: {
+            [custMethodField]: Number(newBuyBal.toFixed(4)),
+            [bankerMethodField]: Number(newSellBal.toFixed(4)),
+          },
+        });
+      } else {
+        const netUSDTDiff = legCustomerUSDT - legBankerUSDT;
+        const newBal = invUSDT[custMethodField] + netUSDTDiff;
+        await tx.currencyInventory.update({
+          where: { currencyCode: toCurrency },
+          data: {
+            [custMethodField]: Number(Math.max(0, newBal).toFixed(4)),
+          },
+        });
+      }
+
+      legsResult.push({
+        buyTransaction: buyTx,
+        sellTransaction: sellTx,
+        bankerName: bankerParty.name,
+        bankerId: b.bankerId,
+        amountINR: legAmountINR,
+        customerRate: customerBuyRate,
+        bankerRate: b.sellRate,
+        customerUSDT: legCustomerUSDT,
+        bankerUSDT: legBankerUSDT,
+        profitUSDT: legProfitUSDT,
+        splitLeg: `${i + 1}/${bankers.length}`,
+      });
+    }
+
+    return {
+      dealGroupId,
+      isSplit: bankers.length > 1,
+      totalAmountINR,
+      customerName: customer.name,
+      customerBuyRate,
+      totalCustomerUSDT: Number(totalCustomerUSDT.toFixed(4)),
+      totalBankerUSDT: Number(totalBankerUSDT.toFixed(4)),
+      totalProfitUSDT: Number(totalDealProfitUSDT.toFixed(2)),
+      legs: legsResult,
+      // First leg references for direct single-deal consumption if needed
+      buyTransaction: legsResult[0]?.buyTransaction,
+      sellTransaction: legsResult[0]?.sellTransaction,
     };
   });
 }

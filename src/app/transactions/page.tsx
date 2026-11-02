@@ -24,6 +24,7 @@ import {
   Trash2,
   MoreVertical,
   AlertTriangle,
+  Split,
 } from 'lucide-react';
 import { formatISTDateTime, toISTDateTimeLocalString, getTodayISTDateString } from '@/lib/dateUtils';
 
@@ -44,6 +45,11 @@ export interface TradeDealItem {
   customerUSDT?: number;
   bankerUSDT?: number;
   profitUSDT: number;
+  isSplit?: boolean;
+  splitPart?: number;
+  splitTotal?: number;
+  dealGroupId?: string;
+  splitDealTotalINR?: number;
   primaryTx: any;
   pairedTx?: any;
 }
@@ -275,6 +281,12 @@ export default function TransactionsPage() {
           ? sellLeg.totalProfit
           : (customerUSDT > 0 && bankerUSDT > 0 ? Number((customerUSDT - bankerUSDT).toFixed(4)) : 0);
 
+        const isSplit = tx.isSplit || tx.pairedTx?.isSplit || false;
+        const splitPart = tx.splitPart || tx.pairedTx?.splitPart;
+        const splitTotal = tx.splitTotal || tx.pairedTx?.splitTotal;
+        const dealGroupId = tx.dealGroupId || tx.pairedTx?.dealGroupId;
+        const splitDealTotalINR = tx.splitDealTotalINR || tx.pairedTx?.splitDealTotalINR;
+
         result.push({
           key: `${buyLeg.receiptNo}-${sellLeg.receiptNo}`,
           isDeal: true,
@@ -292,6 +304,11 @@ export default function TransactionsPage() {
           customerUSDT: Number(customerUSDT.toFixed(4)),
           bankerUSDT: Number(bankerUSDT.toFixed(4)),
           profitUSDT: Number(profit.toFixed(2)),
+          isSplit,
+          splitPart,
+          splitTotal,
+          dealGroupId,
+          splitDealTotalINR,
           primaryTx: tx,
           pairedTx: tx.pairedTx,
         });
@@ -349,6 +366,8 @@ export default function TransactionsPage() {
       'BankerRate',
       'BankerUSDT',
       'EstProfitUSDT',
+      'SplitStatus',
+      'DealGroup',
     ];
     const rows = deals.map((d) => [
       d.customerReceiptNo || '',
@@ -362,6 +381,8 @@ export default function TransactionsPage() {
       d.bankerRate || '',
       d.bankerUSDT || '',
       d.profitUSDT,
+      d.isSplit ? `Split (${d.splitPart}/${d.splitTotal})` : 'Standard',
+      d.dealGroupId || '',
     ]);
 
     const csvContent =
@@ -784,6 +805,19 @@ export default function TransactionsPage() {
                             <span className="text-[10px] text-slate-500 font-sans font-normal">B:</span>
                             {deal.bankerReceiptNo}
                           </div>
+                          {deal.isSplit && (
+                            <div className="pt-0.5">
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-sans font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                                <Split className="w-2.5 h-2.5" />
+                                Split ({deal.splitPart}/{deal.splitTotal})
+                              </span>
+                              {deal.splitDealTotalINR && (
+                                <span className="block text-[9px] text-slate-500 font-sans">
+                                  Total ₹{deal.splitDealTotalINR.toLocaleString('en-IN')}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <span className="font-bold text-indigo-400">{deal.receiptDisplay}</span>
@@ -937,11 +971,27 @@ export default function TransactionsPage() {
                   </div>
 
                   <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex justify-between items-center">
-                    <span className="text-slate-400 text-xs font-semibold uppercase">Total Trade Amount:</span>
+                    <span className="text-slate-400 text-xs font-semibold uppercase">
+                      {activeReceipt.isSplit ? 'Leg Trade Amount:' : 'Total Trade Amount:'}
+                    </span>
                     <span className="text-base font-extrabold text-white">
                       ₹{activeReceipt.tradeAmountINR?.toLocaleString('en-IN')}
                     </span>
                   </div>
+
+                  {activeReceipt.isSplit && (
+                    <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] font-sans flex items-center justify-between">
+                      <span className="font-bold flex items-center gap-1.5">
+                        <Split className="w-3.5 h-3.5" />
+                        Split Deal Leg: Part {activeReceipt.splitPart} of {activeReceipt.splitTotal}
+                      </span>
+                      {activeReceipt.splitDealTotalINR && (
+                        <span className="text-slate-400 font-mono">
+                          Total Deal: ₹{activeReceipt.splitDealTotalINR.toLocaleString('en-IN')}
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   {/* Customer Leg */}
                   <div className="p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/20 space-y-1.5">

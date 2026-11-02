@@ -175,10 +175,20 @@ export async function GET(req: Request) {
         }
       }
 
+      // Parse split deal metadata
+      const splitMatch = tx.notes?.match(/Split Leg\s*(\d+)\/(\d+)/i);
+      const groupMatch = tx.notes?.match(/Group:\s*(DLG-[\w-]+)/i);
+      const totalDealMatch = tx.notes?.match(/Total Deal:\s*[₹Rs.]*\s*([\d,.]+)/i);
+
       return {
         ...tx,
         totalProfit: cleanProfit,
         pairedTx: pairedInfo,
+        isSplit: !!splitMatch,
+        splitPart: splitMatch ? parseInt(splitMatch[1], 10) : undefined,
+        splitTotal: splitMatch ? parseInt(splitMatch[2], 10) : undefined,
+        dealGroupId: groupMatch ? groupMatch[1] : undefined,
+        splitDealTotalINR: totalDealMatch ? parseFloat(totalDealMatch[1].replace(/,/g, '')) : undefined,
       };
     });
 
