@@ -12,17 +12,9 @@ import {
   AlertCircle,
   RefreshCw,
   Calendar,
-  Receipt,
   DollarSign,
-  TrendingUp,
-  Percent,
-  Layers,
   Building2,
   Users,
-  Wallet,
-  Settings2,
-  ChevronDown,
-  ChevronUp,
 } from 'lucide-react';
 import { getWorkingDateTimeISO } from '@/lib/dateUtils';
 
@@ -77,16 +69,7 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
   const [sellRate, setSellRate] = useState<string>('89.20');
   const [isCustomBuyRate, setIsCustomBuyRate] = useState<boolean>(false);
   const [isCustomSellRate, setIsCustomSellRate] = useState<boolean>(false);
-  const [showRateOverrides, setShowRateOverrides] = useState<boolean>(false);
-
-  // Settlement Method
-  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'BANK'>('CASH');
-  const [customSettlementSplit, setCustomSettlementSplit] = useState<boolean>(false);
-  const [buyPaymentMethod, setBuyPaymentMethod] = useState<'CASH' | 'BANK'>('CASH');
-  const [sellPaymentMethod, setSellPaymentMethod] = useState<'CASH' | 'BANK'>('CASH');
-
-  // Single Notes & Date
-  const [notes, setNotes] = useState('');
+  // Transaction Date
   const [customDateTime, setCustomDateTime] = useState<string>('');
 
   // UI States
@@ -99,14 +82,6 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
   useEffect(() => {
     setCustomDateTime(getWorkingDateTimeISO());
   }, []);
-
-  // Sync split payment methods with primary paymentMethod if split is off
-  useEffect(() => {
-    if (!customSettlementSplit) {
-      setBuyPaymentMethod(paymentMethod);
-      setSellPaymentMethod(paymentMethod);
-    }
-  }, [paymentMethod, customSettlementSplit]);
 
   // Load initial parties and currencies
   useEffect(() => {
@@ -262,9 +237,6 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
 
       setSubmitting(true);
       try {
-        const effectiveBuyMethod = customSettlementSplit ? buyPaymentMethod : paymentMethod;
-        const effectiveSellMethod = customSettlementSplit ? sellPaymentMethod : paymentMethod;
-
         const res = await fetch('/api/transactions/deal', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -280,9 +252,8 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
             sellRate: numSellRate,
             buyAmountINR: customerPayoutINR,
             sellAmountINR: bankerCollectionINR,
-            buyPaymentMethod: effectiveBuyMethod,
-            sellPaymentMethod: effectiveSellMethod,
-            notes: notes || undefined,
+            buyPaymentMethod: 'CASH',
+            sellPaymentMethod: 'CASH',
             createdAt: customDateTime || undefined,
           }),
         });
@@ -333,8 +304,7 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
             amountGiven: customerPayoutINR,
             appliedRate: numBuyRate,
             fee: 0,
-            paymentMethod,
-            notes: notes || undefined,
+            paymentMethod: 'CASH',
             createdAt: customDateTime || undefined,
           }),
         });
@@ -375,8 +345,7 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
             amountGiven: bankerCollectionINR,
             appliedRate: numSellRate,
             fee: 0,
-            paymentMethod,
-            notes: notes || undefined,
+            paymentMethod: 'CASH',
             createdAt: customDateTime || undefined,
           }),
         });
@@ -658,11 +627,11 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
           </div>
         </div>
 
-        {/* Step 2: Trade Amount & Settlement Method */}
+        {/* Step 2: Trade Amount & Date */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 pb-2 border-b border-slate-800/80">
             <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold">2</span>
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider">Amount & Settlement</h2>
+            <h2 className="text-sm font-bold text-white uppercase tracking-wider">Amount & Date</h2>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -721,78 +690,19 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
                   {inputCurrencyMode}
                 </span>
               </div>
-
             </div>
 
-            {/* Settlement Method */}
+            {/* Transaction Date & Time */}
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-slate-300 flex items-center gap-1">
-                  <Wallet className="w-4 h-4 text-indigo-400" /> Settlement Source *
-                </label>
-                {mode === 'DEAL' && (
-                  <button
-                    type="button"
-                    onClick={() => setCustomSettlementSplit(!customSettlementSplit)}
-                    className="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
-                  >
-                    <Settings2 className="w-3 h-3" />
-                    {customSettlementSplit ? 'Use Same Account' : 'Split Cash / Bank'}
-                  </button>
-                )}
-              </div>
-
-              {!customSettlementSplit ? (
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('CASH')}
-                    className={`py-3 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-2 ${
-                      paymentMethod === 'CASH'
-                        ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300 shadow-sm'
-                        : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    Cash Safe
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('BANK')}
-                    className={`py-3 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-2 ${
-                      paymentMethod === 'BANK'
-                        ? 'bg-cyan-600/20 border-cyan-500 text-cyan-300 shadow-sm'
-                        : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    Bank Account
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2 p-2 bg-slate-950/80 rounded-xl border border-slate-800">
-                  <div>
-                    <span className="text-[10px] text-slate-400 block mb-1">Customer Payout:</span>
-                    <select
-                      value={buyPaymentMethod}
-                      onChange={(e: any) => setBuyPaymentMethod(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white"
-                    >
-                      <option value="CASH">Cash Safe</option>
-                      <option value="BANK">Bank Account</option>
-                    </select>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 block mb-1">Banker Collection:</span>
-                    <select
-                      value={sellPaymentMethod}
-                      onChange={(e: any) => setSellPaymentMethod(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white"
-                    >
-                      <option value="BANK">Bank Account</option>
-                      <option value="CASH">Cash Safe</option>
-                    </select>
-                  </div>
-                </div>
-              )}
+              <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                <Calendar className="w-4 h-4 text-indigo-400" /> Transaction Date & Time
+              </label>
+              <input
+                type="datetime-local"
+                value={customDateTime}
+                onChange={(e) => setCustomDateTime(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-indigo-200 font-bold text-xs focus:outline-none focus:border-indigo-400 cursor-pointer"
+              />
             </div>
           </div>
         </div>
@@ -852,34 +762,6 @@ export default function TradeTerminal({ initialMode = 'DEAL' }: TradeTerminalPro
                 />
               </div>
             )}
-          </div>
-        </div>
-
-        {/* Step 4: Notes & Date */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-300">
-              Transaction Notes (Optional)
-            </label>
-            <input
-              type="text"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="e.g. Bank IMPS reference, cash delivery remarks..."
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-xs font-medium focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-              <Calendar className="w-4 h-4 text-indigo-400" /> Transaction Date & Time
-            </label>
-            <input
-              type="datetime-local"
-              value={customDateTime}
-              onChange={(e) => setCustomDateTime(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-indigo-200 font-bold text-xs focus:outline-none focus:border-indigo-400 cursor-pointer"
-            />
           </div>
         </div>
 
